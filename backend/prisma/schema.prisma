@@ -6,3 +6,154 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+enum UserRole {
+  SCHOOL_ADMIN
+  TEACHER
+  PARENT
+}
+
+enum ParentLinkStatus {
+  PENDING
+  VERIFIED
+  REVOKED
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+model School {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  email     String?
+  phone     String?
+  address   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships SchoolMembership[]
+  classes     SchoolClass[]
+  learners    Learner[]
+  invitations ParentInvitation[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  firstName    String
+  lastName     String
+  email        String   @unique
+  phone        String?
+  passwordHash String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships SchoolMembership[]
+  parentLinks ParentLearner[]
+}
+
+model SchoolMembership {
+  id        String   @id @default(cuid())
+  schoolId  String
+  userId    String
+  role      UserRole
+  createdAt DateTime @default(now())
+
+  school          School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invitationsSent ParentInvitation[] @relation("InvitationCreator")
+
+  @@unique([schoolId, userId])
+  @@unique([schoolId, id])
+  @@index([userId])
+  @@index([schoolId, role])
+}
+
+model SchoolClass {
+  id           String   @id @default(cuid())
+  schoolId     String
+  name         String
+  academicYear String
+  description  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  school   School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  learners Learner[]
+
+  @@unique([schoolId, name, academicYear])
+  @@unique([schoolId, id])
+  @@index([schoolId])
+}
+
+model Learner {
+  id              String    @id @default(cuid())
+  schoolId        String
+  classId         String
+  firstName       String
+  lastName        String
+  dateOfBirth     DateTime?
+  admissionNumber String
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  school      School      @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  schoolClass SchoolClass @relation(fields: [schoolId, classId], references: [schoolId, id], onDelete: Restrict)
+
+  guardians   ParentLearner[]
+  invitations ParentInvitation[]
+
+  @@unique([schoolId, admissionNumber])
+  @@unique([schoolId, id])
+  @@index([schoolId, classId])
+  @@index([lastName, firstName])
+}
+
+model ParentLearner {
+  id                    String           @id @default(cuid())
+  learnerId             String
+  guardianUserId        String
+  relationship          String
+  status                ParentLinkStatus @default(PENDING)
+  verifiedAt            DateTime?
+  whatsappOptInAt       DateTime?
+  whatsappOptOutAt      DateTime?
+  whatsappConsentSource String?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  learner  Learner @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  guardian User    @relation(fields: [guardianUserId], references: [id], onDelete: Cascade)
+
+  @@unique([learnerId, guardianUserId])
+  @@index([guardianUserId, status])
+}
+
+model ParentInvitation {
+  id                    String           @id @default(cuid())
+  schoolId              String
+  learnerId             String
+  invitedByMembershipId String
+  invitedEmail          String?
+  invitedPhone          String?
+  tokenHash             String           @unique
+  status                InvitationStatus @default(PENDING)
+  expiresAt             DateTime
+  acceptedAt            DateTime?
+  createdAt             DateTime         @default(now())
+
+  school              School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  learner             Learner          @relation(fields: [schoolId, learnerId], references: [schoolId, id], onDelete: Cascade)
+  invitedByMembership SchoolMembership @relation("InvitationCreator", fields: [schoolId, invitedByMembershipId], references: [schoolId, id], onDelete: Restrict)
+
+  @@index([schoolId, status])
+  @@index([schoolId, invitedByMembershipId])
+  @@index([learnerId])
+}
