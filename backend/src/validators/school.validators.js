@@ -106,3 +106,12 @@ export const listLearnersQuerySchema = z.object({
     classId: idParam.optional(),
   }),
 });
+
+export const listAttendanceQuerySchema = z.object({
+  params: z.object({ schoolId: idParam }),
+  query: z.object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    classId: idParam.optional(),
+    learnerId: idParam.optional(),
+  }),
+});

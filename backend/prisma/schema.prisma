@@ -26,6 +26,13 @@ enum InvitationStatus {
   REVOKED
 }
 
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
 model School {
   id        String   @id @default(cuid())
   name      String
@@ -41,6 +48,10 @@ model School {
   classes     SchoolClass[]
   learners    Learner[]
   invitations ParentInvitation[]
+  attendances Attendance[]
+  assessments Assessment[]
+  assessmentResults AssessmentResult[]
+  classTeachers ClassTeacher[]
 }
 
 model User {
@@ -56,6 +67,10 @@ model User {
 
   memberships SchoolMembership[]
   parentLinks ParentLearner[]
+  attendances Attendance[]
+  attendanceUpdatedBy Attendance[] @relation("AttendanceUpdatedBy")
+  assessmentResults AssessmentResult[]
+  assessmentResultUpdatedBy AssessmentResult[] @relation("AssessmentResultUpdatedBy")
 }
 
 model SchoolMembership {
@@ -68,6 +83,7 @@ model SchoolMembership {
   school          School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   invitationsSent ParentInvitation[] @relation("InvitationCreator")
+  classTeachers ClassTeacher[]
 
   @@unique([schoolId, userId])
   @@unique([schoolId, id])
@@ -86,6 +102,8 @@ model SchoolClass {
 
   school   School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   learners Learner[]
+  assessments Assessment[]
+  classTeachers ClassTeacher[]
 
   @@unique([schoolId, name, academicYear])
   @@unique([schoolId, id])
@@ -109,6 +127,8 @@ model Learner {
 
   guardians   ParentLearner[]
   invitations ParentInvitation[]
+  attendances Attendance[]
+  assessmentResults AssessmentResult[]
 
   @@unique([schoolId, admissionNumber])
   @@unique([schoolId, id])
@@ -157,3 +177,81 @@ model ParentInvitation {
   @@index([schoolId, invitedByMembershipId])
   @@index([learnerId])
 }
+
+model Attendance {
+  id          String         @id @default(cuid())
+  schoolId    String
+  learnerId   String
+  date        DateTime
+  status      AttendanceStatus
+  recordedById String
+  updatedById   String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  school      School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  learner     Learner        @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  recordedBy  User           @relation(fields: [recordedById], references: [id])
+  updatedBy   User?          @relation("AttendanceUpdatedBy", fields: [updatedById], references: [id])
+
+  @@unique([schoolId, learnerId, date])
+  @@index([schoolId, date])
+  @@index([schoolId, learnerId])
+}
+
+model Assessment {
+  id          String   @id @default(cuid())
+  schoolId    String
+  classId     String
+  title       String
+  description String?
+  date        DateTime
+  maxScore    Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  school      School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  schoolClass SchoolClass @relation(fields: [schoolId, classId], references: [schoolId, id], onDelete: Restrict)
+  results     AssessmentResult[]
+
+  @@index([schoolId, classId])
+}
+
+model AssessmentResult {
+  id           String   @id @default(cuid())
+  schoolId     String
+  assessmentId String
+  learnerId    String
+  score        Int
+  recordedById String
+  updatedById    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  school      School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  assessment  Assessment   @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  learner     Learner      @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  recordedBy  User         @relation(fields: [recordedById], references: [id])
+  updatedBy   User?        @relation("AssessmentResultUpdatedBy", fields: [updatedById], references: [id])
+
+  @@unique([schoolId, assessmentId, learnerId])
+  @@index([schoolId, assessmentId])
+  @@index([schoolId, learnerId])
+}
+
+model ClassTeacher {
+  id          String   @id @default(cuid())
+  schoolId    String
+  classId     String
+  membershipId String
+  createdAt   DateTime @default(now())
+
+  school       School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  schoolClass  SchoolClass     @relation(fields: [schoolId, classId], references: [schoolId, id], onDelete: Cascade)
+  membership   SchoolMembership @relation(fields: [schoolId, membershipId], references: [schoolId, id], onDelete: Cascade)
+
+  @@unique([schoolId, classId, membershipId])
+  @@index([membershipId])
+  @@index([schoolId, classId])
+}
+

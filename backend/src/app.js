@@ -9,6 +9,8 @@ import healthRoutes from "./routes/health.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import bootstrapRoutes from "./routes/bootstrap.routes.js";
 import schoolsRoutes from "./routes/schools.routes.js";
+import attendanceRoutes from "./routes/attendance.routes.js";
+import assessmentRoutes from "./routes/assessment.routes.js";
 import { notFound, errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
@@ -40,6 +42,8 @@ app.use("/api/health", healthRoutes);
 app.use("/api/auth", authLimiter, authRoutes);
 app.use("/api/bootstrap", authLimiter, bootstrapRoutes);
 app.use("/api/schools", authLimiter, schoolsRoutes);
+app.use("/api/schools", authLimiter, attendanceRoutes);
+app.use("/api/schools", authLimiter, assessmentRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
