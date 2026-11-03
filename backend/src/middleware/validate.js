@@ -7,8 +7,9 @@ export const validate = (schema) => (req, res, next) => {
     });
     req.validated = parsed;
     if (parsed.body !== undefined) req.body = parsed.body;
-    if (parsed.query !== undefined) req.query = parsed.query;
-    if (parsed.params !== undefined) req.params = parsed.params;
+    // Note: req.query and req.params are getter-only in Express 5 and must not be
+    // reassigned. They are already populated by the router; validated copies live
+    // in req.validated for handlers that need them.
     next();
   } catch (error) {
     next(error);
