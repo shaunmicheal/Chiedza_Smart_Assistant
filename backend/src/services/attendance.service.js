@@ -74,8 +74,16 @@ export const listAttendance = async (schoolId, { date, classId, learnerId } = {}
     where,
     include: {
       learner: {
-        select: { id: true, firstName: true, lastName: true, admissionNumber: true, classId: true },
-        include: { schoolClass: { select: { id: true, name: true } } },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          admissionNumber: true,
+          classId: true,
+          schoolClass: {
+            select: { id: true, name: true },
+          },
+        },
       },
       recordedBy: { select: { id: true, firstName: true, lastName: true } },
     },

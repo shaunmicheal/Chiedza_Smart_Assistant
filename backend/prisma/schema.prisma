@@ -61,6 +61,7 @@ model School {
   alertRules           AlertRule[]
   earlyWarningAlerts   EarlyWarningAlert[]
   alertStatusHistories AlertStatusHistory[]
+  communicationDrafts  ParentCommunicationDraft[]
 }
 
 model User {
@@ -74,12 +75,13 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  memberships               SchoolMembership[]
-  parentLinks               ParentLearner[]
-  attendances               Attendance[]
-  attendanceUpdatedBy       Attendance[]       @relation("AttendanceUpdatedBy")
-  assessmentResults         AssessmentResult[]
-  assessmentResultUpdatedBy AssessmentResult[] @relation("AssessmentResultUpdatedBy")
+  memberships                SchoolMembership[]
+  parentLinks                ParentLearner[]
+  attendances                Attendance[]
+  attendanceUpdatedBy        Attendance[]               @relation("AttendanceUpdatedBy")
+  assessmentResults          AssessmentResult[]
+  assessmentResultUpdatedBy  AssessmentResult[]         @relation("AssessmentResultUpdatedBy")
+  createdCommunicationDrafts ParentCommunicationDraft[]
 }
 
 model SchoolMembership {
@@ -283,6 +285,29 @@ model AlertRule {
   @@index([alertType])
 }
 
+model ParentCommunicationDraft {
+  id              String    @id @default(cuid())
+  schoolId        String
+  alertId         String
+  userId          String
+  language        String
+  draftText       String
+  evidenceSummary String?
+  status          String    @default("DRAFT")
+  approvedBy      String?
+  approvedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  createdBy User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  school    School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  alert     EarlyWarningAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  @@unique([schoolId, alertId, userId, status])
+  @@index([schoolId])
+  @@index([alertId])
+}
+
 model EarlyWarningAlert {
   id                  String      @id @default(cuid())
   schoolId            String
@@ -304,11 +329,12 @@ model EarlyWarningAlert {
   updatedAt           DateTime    @updatedAt
   alertRuleId         String?
 
-  school               School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  learner              Learner?             @relation(fields: [schoolId, learnerId], references: [schoolId, id], onDelete: Cascade)
-  class                SchoolClass?         @relation(fields: [schoolId, classId], references: [schoolId, id], onDelete: Cascade)
-  alertRule            AlertRule?           @relation(fields: [alertRuleId], references: [id], onDelete: SetNull)
+  school               School                     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  learner              Learner?                   @relation(fields: [schoolId, learnerId], references: [schoolId, id], onDelete: Cascade)
+  class                SchoolClass?               @relation(fields: [schoolId, classId], references: [schoolId, id], onDelete: Cascade)
+  alertRule            AlertRule?                 @relation(fields: [alertRuleId], references: [id], onDelete: SetNull)
   alertStatusHistories AlertStatusHistory[]
+  communicationDrafts  ParentCommunicationDraft[]
 
   @@index([schoolId, alertType, status])
   @@index([schoolId, learnerId, status])

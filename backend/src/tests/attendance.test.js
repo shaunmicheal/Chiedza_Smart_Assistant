@@ -8,7 +8,7 @@ const SCHOOL_SLUG = "stage3-attendance-school";
 const ADMIN_EMAIL = "s3a-admin@test.chiedza.local";
 const TEACHER_EMAIL = "s3a-teacher@test.chiedza.local";
 
-let school, adminUser, teacherUser, class1, learner1, learner2, adminToken, teacherToken;
+let school, adminUser, teacherUser, class1, class2, learner1, learner2, adminToken, teacherToken;
 
 const cleanup = async () => {
   const s = await prisma.school.findUnique({ where: { slug: SCHOOL_SLUG } });
@@ -49,16 +49,22 @@ beforeAll(async () => {
   class1 = await prisma.schoolClass.create({
     data: { schoolId: school.id, name: "Grade 1", academicYear: "2026" },
   });
+  class2 = await prisma.schoolClass.create({
+    data: { schoolId: school.id, name: "Grade 2", academicYear: "2026" },
+  });
 
   learner1 = await prisma.learner.create({
     data: { schoolId: school.id, classId: class1.id, firstName: "Alice", lastName: "Moyo", admissionNumber: "A-001" },
   });
   learner2 = await prisma.learner.create({
-    data: { schoolId: school.id, classId: class1.id, firstName: "Bob", lastName: "Ncube", admissionNumber: "A-002" },
+    data: { schoolId: school.id, classId: class2.id, firstName: "Bob", lastName: "Ncube", admissionNumber: "A-002" },
   });
 
   await prisma.classTeacher.create({
     data: { schoolId: school.id, classId: class1.id, membershipId: teacherMembership.id },
+  });
+  await prisma.classTeacher.create({
+    data: { schoolId: school.id, classId: class2.id, membershipId: teacherMembership.id },
   });
 
   const loginAdmin = await request(app).post("/api/auth/login").send({ email: ADMIN_EMAIL, password: PASSWORD });
@@ -71,6 +77,7 @@ afterAll(async () => {
   await cleanup();
   await prisma.$disconnect();
 });
+
 describe("Attendance", () => {
   it("unauthenticated request returns 401", async () => {
     const res = await request(app).post(`/api/schools/${school.id}/attendance`).send({
@@ -91,8 +98,8 @@ describe("Attendance", () => {
     expect(res.body.data.learnerId).toBe(learner1.id);
   });
 
-  it("records every supported attendance status", async () => {
-    const statuses = ["ABSENT", "LATE", "EXCUSED"];
+  it("records every attendance status", async () => {
+    const statuses = ["PRESENT", "ABSENT", "LATE", "EXCUSED"];
     for (const status of statuses) {
       const d = new Date();
       d.setDate(d.getDate() + statuses.indexOf(status));
@@ -104,7 +111,7 @@ describe("Attendance", () => {
       expect(res.status).toBe(201);
       expect(res.body.data.status).toBe(status);
     }
-  });
+  );
 
   it("prevents duplicate attendance for same learner on same date", async () => {
     const res = await request(app)
@@ -119,14 +126,13 @@ describe("Attendance", () => {
       .get(`/api/schools/${school.id}/attendance?date=2026-01-15`)
       .set("Authorization", `Bearer ${adminToken}`);
     expect(res.status).toBe(200);
-    expect(Array.isArray(res.body.data)).toBe(true);
     expect(res.body.data.length).toBeGreaterThan(0);
   });
 
   it("filters attendance by classId", async () => {
     const res = await request(app)
       .get(`/api/schools/${school.id}/attendance?classId=${class1.id}`)
-      .set("Authorization", `Bearer ${adminToken}`);
+      .set("Authorization", `Bearer ${adminToken}`)
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.data)).toBe(true);
   });
@@ -134,7 +140,7 @@ describe("Attendance", () => {
   it("retrieves attendance by learner", async () => {
     const res = await request(app)
       .get(`/api/schools/${school.id}/learners/${learner1.id}/attendance`)
-      .set("Authorization", `Bearer ${adminToken}`);
+      .set("Authorization", `Bearer ${adminToken}`)
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.data)).toBe(true);
     expect(res.body.data.some((a) => a.learnerId === learner1.id)).toBe(true);
@@ -143,7 +149,7 @@ describe("Attendance", () => {
   it("corrects an existing attendance record", async () => {
     const listRes = await request(app)
       .get(`/api/schools/${school.id}/attendance?date=2026-01-15`)
-      .set("Authorization", `Bearer ${adminToken}`);
+      .set("Authorization", `Bearer ${adminToken}`)
     const record = listRes.body.data.find((a) => a.learnerId === learner1.id);
     if (record) {
       const res = await request(app)
@@ -165,8 +171,25 @@ describe("Attendance", () => {
     expect(res.status).toBe(201);
   });
 
+  it("teacher cannot access another teacher's class records", async () => {
+    const res = await request(app)
+      .post(`/api/schools/${school.id}/attendance`)
+      .set("Authorization", `Bearer ${teacherToken}`)
+      .send({ learnerId: learner1.id, date: "2026-02-01", status: "PRESENT" });
+    expect(res.status).toBe(403);
+  });
+
+  it("teacher with no assigned classes receives empty list", async () => {
+    const res = await request(app)
+      .get(`/api/schools/${school.id}/attendance`)
+      .set("Authorization", `Bearer ${teacherToken}`)
+      .query({ classId: "non-existent-class" })
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(0);
+  });
+
   it("cross-school: admin cannot record attendance in another school", async () => {
-    const otherSchool = await prisma.school.create({ data: { name: "Other", slug: "s3-other-school" } });
+    const otherSchool = await prisma.school.create({ data: { name: "Other", slug: `s3-other-school-${Date.now()}` } });
     const res = await request(app)
       .post(`/api/schools/${otherSchool.id}/attendance`)
       .set("Authorization", `Bearer ${adminToken}`)
@@ -183,4 +206,3 @@ describe("Attendance", () => {
     expect(res.status).toBe(404);
   });
 });
-

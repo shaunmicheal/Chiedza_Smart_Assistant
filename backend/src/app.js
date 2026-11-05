@@ -12,6 +12,7 @@ import schoolsRoutes from "./routes/schools.routes.js";
 import attendanceRoutes from "./routes/attendance.routes.js";
 import assessmentRoutes from "./routes/assessment.routes.js";
 import earlyWarningRoutes from "./routes/earlyWarning.routes.js";
+import draftRoutes from "./routes/draft.routes.js";
 import { notFound, errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
@@ -43,9 +44,10 @@ app.use("/api/health", healthRoutes);
 app.use("/api/auth", authLimiter, authRoutes);
 app.use("/api/bootstrap", authLimiter, bootstrapRoutes);
 app.use("/api/schools", authLimiter, schoolsRoutes);
-app.use("/api/schools", authLimiter, attendanceRoutes);
-app.use("/api/schools", authLimiter, assessmentRoutes);
+app.use("/api/schools/:schoolId", authLimiter, attendanceRoutes);
+app.use("/api/schools/:schoolId", authLimiter, assessmentRoutes);
 app.use("/api/schools/:schoolId/early-warning", authLimiter, earlyWarningRoutes);
+app.use("/api/schools/:schoolId/drafts", authLimiter, draftRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
