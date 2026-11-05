@@ -1,28 +1,50 @@
+import { demoLearners, initialAssessments } from './operations'
+
+const linkedChildId = 'l-002'
+const linkedLearner = demoLearners.find((learner) => learner.id === linkedChildId)
+const attendanceDaysPresent = 48
+const attendanceDaysAbsent = 2
+
 export const linkedChildDemo = {
-  initials: 'TM',
-  name: 'Tendai Moyo',
-  className: 'Grade 4A',
+  initials: 'KM',
+  id: linkedLearner.id,
+  name: linkedLearner.name,
+  className: linkedLearner.className,
   relation: 'Linked child · demonstration only',
+  attendanceDaysPresent,
+  attendanceDaysAbsent,
 }
 
-export const parentOverviewStats = [
-  { label: 'Attendance', value: '94%', change: 'Demo summary', tone: 'positive', icon: 'attendance' },
-  { label: 'Academic progress', value: 'On track', change: 'Demo summary', tone: 'positive', icon: 'assessment' },
-]
+export const linkedChildAttendanceRate = `${Math.round(
+  attendanceDaysPresent / (attendanceDaysPresent + attendanceDaysAbsent) * 100,
+)}%`
 
 export const linkedChildAttendanceTrend = [
-  { month: 'Jan', attendance: 92, target: 90 },
-  { month: 'Feb', attendance: 94, target: 90 },
-  { month: 'Mar', attendance: 90, target: 90 },
-  { month: 'Apr', attendance: 96, target: 90 },
-  { month: 'May', attendance: 93, target: 90 },
-  { month: 'Jun', attendance: 94, target: 90 },
+  { month: 'Jan', attendance: 95, target: 90 },
+  { month: 'Feb', attendance: 96, target: 90 },
+  { month: 'Mar', attendance: 94, target: 90 },
+  { month: 'Apr', attendance: 97, target: 90 },
+  { month: 'May', attendance: 96, target: 90 },
+  { month: 'Jun', attendance: 96, target: 90 },
 ]
 
-export const linkedChildAssessments = [
-  { group: 'Reading', score: 78 },
-  { group: 'Writing', score: 74 },
-  { group: 'Numeracy', score: 82 },
+export const linkedChildAssessments = ['Mathematics', 'Reading', 'English'].map((subject) => {
+  const assessment = initialAssessments.find((item) =>
+    item.className === linkedLearner.className && item.subject === subject)
+  const result = assessment?.results.find((item) => item.learnerId === linkedChildId)
+  return {
+    group: subject,
+    score: Math.round((Number(result?.score) / assessment.maximum) * 100),
+  }
+})
+
+const academicAverage = Math.round(
+  linkedChildAssessments.reduce((total, result) => total + result.score, 0) / linkedChildAssessments.length,
+)
+
+export const parentOverviewStats = [
+  { label: 'Attendance', value: linkedChildAttendanceRate, change: 'Demo summary', tone: 'positive', icon: 'attendance' },
+  { label: 'Assessment average', value: `${academicAverage}%`, change: 'Demo summary', tone: 'positive', icon: 'assessment' },
 ]
 
 export const parentSchoolMessages = [

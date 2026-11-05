@@ -1,12 +1,12 @@
 export const teacherOverviewStats = [
-  { label: 'Assigned learners', value: '62', change: 'Demo total', tone: 'positive', icon: 'learners' },
-  { label: 'Present today', value: '58 / 62', change: 'Demo count', tone: 'positive', icon: 'attendance' },
+  { label: 'Assigned learners', value: '8', change: 'Demo total', tone: 'positive', icon: 'learners' },
+  { label: 'Present today', value: '4 / 8', change: 'Demo count', tone: 'positive', icon: 'attendance' },
   { label: 'Learners to review', value: '3', change: 'Demo count', tone: 'warning', icon: 'risk' },
 ]
 
 export const teacherAssignedClasses = [
-  { name: 'Grade 4A', learners: 32, note: 'Assigned class · demo' },
-  { name: 'Grade 5B', learners: 30, note: 'Assigned class · demo' },
+  { name: 'Grade 4A', learners: 4, note: 'Assigned class · demo' },
+  { name: 'Grade 5B', learners: 4, note: 'Assigned class · demo' },
 ]
 
 export const teacherAttendanceTrend = [
@@ -19,9 +19,9 @@ export const teacherAttendanceTrend = [
 ]
 
 export const teacherLearnersNeedingAttention = [
-  { name: 'Netsai M.', className: 'Grade 4A', risk: 'Repeated absences', priority: 'High' },
-  { name: 'Takunda S.', className: 'Grade 5B', risk: 'Declining marks', priority: 'Medium' },
-  { name: 'Anesu P.', className: 'Grade 4A', risk: 'Repeated absences', priority: 'Medium' },
+  { name: 'Ropafadzo Ncube', className: 'Grade 4A', risk: 'Repeated absences', priority: 'High' },
+  { name: 'Nyasha Dube', className: 'Grade 5B', risk: 'Declining marks', priority: 'Medium' },
+  { name: 'Tafadzwa Sibanda', className: 'Grade 5B', risk: 'Repeated absences', priority: 'High' },
 ]
 
 export const recentAssessmentActivity = [

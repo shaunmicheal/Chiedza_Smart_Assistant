@@ -1,11 +1,29 @@
+import { demoAlerts, demoLearners, initialAssessments, initialCommunications } from './operations'
+
 export const DEMO_DATA_NOTICE =
   'Demonstration data only — figures and names shown here are not live school records.'
 
+const recordedScores = initialAssessments.flatMap((assessment) =>
+  assessment.results.map((result) => ({ score: Number(result.score), maximum: assessment.maximum })),
+)
+const overallAssessmentAverage = Math.round(
+  (recordedScores.reduce((total, result) => total + result.score / result.maximum * 100, 0) / recordedScores.length) || 0,
+)
+const schoolAttendanceAverage = Math.round(
+  demoLearners.reduce((total, learner) => total + Number.parseInt(learner.attendance, 10), 0) / demoLearners.length,
+)
+
 export const dashboardStats = [
-  { label: 'Total learners', value: '324', change: 'Demo total', tone: 'positive', icon: 'learners' },
-  { label: 'Attendance rate', value: '94.8%', change: 'Demo rate', tone: 'positive', icon: 'attendance' },
-  { label: 'Assessment average', value: '76.4%', change: 'Demo average', tone: 'positive', icon: 'assessment' },
-  { label: 'Active early warnings', value: '17', change: 'Demo count', tone: 'warning', icon: 'risk' },
+  { label: 'Total learners', value: String(demoLearners.length), change: 'Demo total', tone: 'positive', icon: 'learners' },
+  { label: 'Attendance rate', value: `${schoolAttendanceAverage}%`, change: 'Demo rate', tone: 'positive', icon: 'attendance' },
+  { label: 'Assessment average', value: `${overallAssessmentAverage}%`, change: 'Demo average', tone: 'positive', icon: 'assessment' },
+  {
+    label: 'Active early warnings',
+    value: String(demoAlerts.filter((alert) => alert.status === 'Active').length),
+    change: 'Demo count',
+    tone: 'warning',
+    icon: 'risk',
+  },
 ]
 
 export const attendanceTrend = [
@@ -19,47 +37,46 @@ export const attendanceTrend = [
 ]
 
 export const assessmentByClass = [
-  { group: 'Lower primary', score: 79 },
-  { group: 'Grade 3', score: 84 },
-  { group: 'Grade 4', score: 77 },
-  { group: 'Grade 5', score: 71 },
-  { group: 'Grade 6', score: 68 },
-  { group: 'Grade 7', score: 82 },
-]
+  ...new Set(initialAssessments.map((assessment) => assessment.className)),
+].map((className) => {
+  const classAssessments = initialAssessments.filter((assessment) => assessment.className === className)
+  const results = classAssessments.flatMap((assessment) =>
+    assessment.results.map((result) => ({ score: Number(result.score), maximum: assessment.maximum })),
+  )
+  return {
+    group: className,
+    score: Math.round(results.reduce((total, result) => total + result.score / result.maximum * 100, 0) / results.length),
+  }
+})
 
-export const riskLearners = [
-  { name: 'Netsai M.', className: 'Grade 4A', risk: 'Attendance and marks', priority: 'High' },
-  { name: 'Takunda S.', className: 'Grade 5B', risk: 'Repeated absences', priority: 'Medium' },
-  { name: 'Anesu P.', className: 'Grade 3A', risk: 'Declining marks', priority: 'High' },
-  { name: 'Makanaka G.', className: 'Grade 6C', risk: 'Repeated absences', priority: 'Medium' },
-]
+export const riskLearners = demoAlerts
+  .filter((alert) => alert.status !== 'Resolved')
+  .map((alert) => ({
+    name: alert.learner,
+    className: alert.className,
+    risk: alert.type,
+    priority: alert.severity === 'high' ? 'High' : 'Medium',
+  }))
 
-export const recentAlerts = [
-  {
-    title: 'Repeated absences',
-    detail: 'Review the demonstration attendance pattern for Grade 4A.',
-    level: 'urgent',
-    time: 'Demo',
-  },
-  {
-    title: 'Declining marks',
-    detail: 'Review the demonstration assessment pattern for Grade 5B.',
-    level: 'warning',
-    time: 'Demo',
-  },
-  {
-    title: 'Repeated absences',
-    detail: 'Review another example attendance pattern requiring attention.',
-    level: 'info',
-    time: 'Demo',
-  },
-]
+export const recentAlerts = demoAlerts
+  .slice()
+  .filter((alert) => alert.status === 'Active')
+  .sort((left, right) => right.detected.localeCompare(left.detected))
+  .slice(0, 3)
+  .map((alert) => ({
+    id: alert.id,
+    title: alert.type,
+    detail: `${alert.className} · ${alert.evidence}`,
+    level: alert.severity === 'high' ? 'urgent' : alert.severity === 'medium' ? 'warning' : 'info',
+    time: alert.detected,
+  }))
 
-export const parentMessages = [
-  { name: 'Mujuru family', status: 'Reply sent', tone: 'positive' },
-  { name: 'Mapuranga family', status: 'Awaiting reply', tone: 'warning' },
-  { name: 'Gororo family', status: 'Reviewed', tone: 'positive' },
-]
+export const parentMessages = initialCommunications.map((message) => ({
+  id: message.id,
+  name: demoLearners.find((learner) => learner.id === message.learnerId)?.guardian ?? 'Demo family',
+  status: message.status,
+  tone: ['Approved', 'Delivered'].includes(message.status) ? 'positive' : 'warning',
+}))
 
 export const recentActivity = [
   { title: 'Attendance entries reviewed', detail: 'Example activity · Grade 4A', time: 'Demo' },

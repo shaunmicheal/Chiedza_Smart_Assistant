@@ -4,6 +4,8 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -59,6 +61,24 @@ export function AssessmentChart({
             <Tooltip />
             <Bar dataKey="score" name="Assessment average" fill="#174D3A" radius={[10, 10, 0, 0]} />
           </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </Panel>
+  )
+}
+
+export function PerformanceTrendChart({ data }) {
+  return (
+    <Panel eyebrow="Assessment history" title="Performance trend">
+      <div className="chart-wrap" role="img" aria-label="Demonstration assessment performance over time">
+        <ResponsiveContainer width="100%" height={260}>
+          <LineChart data={data} margin={{ left: -18, right: 12, top: 8, bottom: 0 }}>
+            <CartesianGrid stroke="#DCE9DE" vertical={false} />
+            <XAxis dataKey="dateLabel" tickLine={false} axisLine={false} tick={{ fill: '#5B6B63', fontSize: 11 }} />
+            <YAxis domain={[0, 100]} tickLine={false} axisLine={false} tick={{ fill: '#5B6B63', fontSize: 11 }} />
+            <Tooltip />
+            <Line type="monotone" dataKey="average" name="Class average" stroke="#174D3A" strokeWidth={3} dot={{ fill: '#D8A64B', r: 4 }} />
+          </LineChart>
         </ResponsiveContainer>
       </div>
     </Panel>

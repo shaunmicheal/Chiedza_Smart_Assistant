@@ -32,7 +32,7 @@ function DashboardPage() {
           action={<Link className="link-button" to="/admin/early-warnings">View all</Link>}
         >
           <ul className="alert-list">
-            {recentAlerts.map((alert) => <AlertItem key={alert.title} {...alert} />)}
+            {recentAlerts.map((alert) => <AlertItem key={alert.id} {...alert} />)}
           </ul>
         </Panel>
       </section>
@@ -45,7 +45,7 @@ function DashboardPage() {
           action={<Link className="link-button" to="/admin/parent-communication">Open messages</Link>}
         >
           <ul className="message-list">
-            {parentMessages.map((message) => <ParentMessageRow key={message.name} {...message} />)}
+            {parentMessages.map((message) => <ParentMessageRow key={message.id} {...message} />)}
           </ul>
         </Panel>
       </section>
