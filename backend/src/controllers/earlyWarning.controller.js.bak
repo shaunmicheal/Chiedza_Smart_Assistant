@@ -1,0 +1,257 @@
+import * as earlyWarningService from "../services/earlyWarning.service.js"
+
+export const createAlertRule = async (req, res, next) => {
+  try {
+    const { name, alertType, config } = req.body
+    const schoolId = req.schoolId
+
+    if (!name || !alertType) {
+      const error = new Error("Name and alertType are required")
+      error.status = 400
+      throw error
+    }
+
+    const alertRule = await prisma.alertRule.upsert({
+      where: { schoolId_name: { schoolId, name } },
+      update: { alertType, config, isActive: true },
+      create: { schoolId, name, alertType, config, isActive: true },
+    })
+
+    res.status(201).json({ success: true, data: alertRule })
+  } catch (error) { next(error) }
+}
+
+export const listAlertRules = async (req, res, next) => {
+  try {
+    const schoolId = req.schoolId
+    const rules = await prisma.alertRule.findMany({ where: { schoolId } })
+    res.status(200).json({ success: true, data: rules })
+  } catch (error) { next(error) }
+}
+
+export const updateAlertRule = async (req, res, next) => {
+  try {
+    const { ruleId } = req.params
+    const { alertType, config, isActive } = req.body
+    const schoolId = req.schoolId
+
+    const alertRule = await prisma.alertRule.update({
+      where: { id: ruleId, schoolId },
+      data: { alertType, config, isActive },
+    })
+
+    res.status(200).json({ success: true, data: alertRule })
+  } catch (error) { next(error) }
+}
+
+export const deleteAlertRule = async (req, res, next) => {
+  try {
+    const { ruleId } = req.params
+    const schoolId = req.schoolId
+
+    await prisma.alertRule.update({
+      where: { id: ruleId, schoolId },
+      data: { isActive: false },
+    })
+
+    res.status(200).json({ success: true, message: "Alert rule deactivated" })
+  } catch (error) { next(error) }
+}
+
+export const listAlerts = async (req, res, next) => {
+  try {
+    const schoolId = req.schoolId
+    const { alertType, learnerId, classId, status } = req.query
+
+    const where = { schoolId }
+    if (alertType) where.alertType = alertType
+    if (learnerId) where.learnerId = learnerId
+    if (classId) where.classId = classId
+    if (status) where.status = status
+
+    const alerts = await prisma.earlyWarningAlert.findMany({
+      where,
+      include: {
+        learner: { select: { id: true, firstName: true, lastName: true } },
+        class: { select: { id: true, name: true } },
+        alertRule: true
+      },
+      orderBy: { createdAt: "desc" },
+    })
+
+    res.status(200).json({ success: true, data: alerts })
+  } catch (error) { next(error) }
+}
+
+export const getAlertDetail = async (req, res, next) => {
+  try {
+    const { alertId } = req.params
+    const schoolId = req.schoolId
+
+    const alert = await prisma.earlyWarningAlert.findFirst({
+      where: { id: alertId, schoolId },
+      include: {
+        learner: { select: { id: true, firstName: true, lastName: true, classId: true } },
+        class: { select: { id: true, name: true } },
+        alertRule: { select: { id: true, name: true, alertType: true, config: true } }
+      },
+    })
+
+    if (!alert) {
+      const error = new Error("Alert not found")
+      error.status = 404
+      throw error
+    }
+
+    res.status(200).json({ success: true, data: alert })
+  } catch (error) { next(error) }
+}
+
+export const listClassAlerts = async (req, res, next) => {
+  try {
+    const schoolId = req.schoolId
+    const { classId, alertType, status } = req.query
+
+    const where = { schoolId }
+    if (classId) where.classId = classId
+    if (alertType) where.alertType = alertType
+    if (status) where.status = status
+
+    const alerts = await prisma.earlyWarningAlert.findMany({
+      where,
+      include: {
+        learner: { select: { id: true, firstName: true, lastName: true } },
+        alertRule: { select: { id: true, name: true, alertType: true } }
+      },
+      orderBy: { createdAt: "desc" },
+    })
+
+    res.status(200).json({ success: true, data: alerts })
+  } catch (error) { next(error) }
+}
+
+export const acknowledgeAlert = async (req, res, next) => {
+  try {
+    const { alertId } = req.params
+    const schoolId = req.schoolId
+    const acknowledgedById = req.user.id
+
+    const alert = await prisma.earlyWarningAlert.findFirst({
+      where: { id: alertId, schoolId },
+      include: {
+        learner: { select: { id: true, firstName: true, lastName: true, classId: true } },
+        class: { select: { id: true, name: true } },
+        alertRule: true
+      },
+    })
+
+    if (!alert) {
+      const error = new Error("Alert not found")
+      error.status = 404
+      throw error
+    }
+
+    // School admin has school-wide access
+    if (req.role === "SCHOOL_ADMIN") {
+      // Proceed with acknowledgement
+    } else {
+      // Teacher: verify assignment to the alert's class
+      const membershipId = req.membership?.id
+      if (!membershipId) {
+        const error = new Error("No membership found for this user.")
+        error.status = 403
+        throw error
+      }
+
+      // If alert has a class, teacher must be assigned to that class
+      if (alert.classId) {
+        const classTeacher = await prisma.classTeacher.findFirst({
+          where: {
+            schoolId: req.schoolId,
+            classId: alert.classId,
+            membershipId,
+          },
+          select: { id: true },
+        })
+
+        if (!classTeacher) {
+          const error = new Error("You are not authorised to access this class.")
+          error.status = 403
+          throw error
+        }
+      } else {
+        // Alert has no classId (class-level alert): teachers are not authorised
+        // Alerts with classId = null must be admin-only because there is no class assignment
+        // against which teacher access can safely be verified
+        const error = new Error(
+          "You are not authorised to acknowledge class-level alerts. Only school admins can acknowledge class-level alerts."
+        )
+        error.status = 403
+        throw error
+      }
+    }
+
+    // Update status
+    const updatedAlert = await prisma.earlyWarningAlert.update({
+      where: { id: alertId, schoolId },
+      data: {
+        status: "ACKNOWLEDGED",
+        acknowledgedBy: acknowledgedById,
+        acknowledgedAt: new Date(),
+      },
+      include: {
+        learner: { select: { id: true, firstName: true, lastName: true } },
+        class: { select: { id: true, name: true } },
+        alertRule: true
+      },
+    })
+
+    // Record in status history
+    await prisma.alertStatusHistory.create({
+      data: {
+        alertId: alert.id,
+        schoolId,
+        fromStatus: "ACTIVE",
+        toStatus: "ACKNOWLEDGED",
+        changedBy: acknowledgedById,
+      },
+    })
+
+    res.status(200).json({ success: true, data: updatedAlert })
+  } catch (error) { next(error) }
+}
+
+export const resolveAlert = async (req, res, next) => {
+  try {
+    const { alertId } = req.params
+    const schoolId = req.schoolId
+    const resolvedById = req.user.id
+
+    const alert = await prisma.earlyWarningAlert.update({
+      where: { id: alertId, schoolId },
+      data: {
+        status: "RESOLVED",
+        resolvedBy: resolvedById,
+        resolvedAt: new Date(),
+      },
+      include: {
+        learner: { select: { id: true, firstName: true, lastName: true } },
+        class: { select: { id: true, name: true } },
+        alertRule: true
+      },
+    })
+
+    // Record in status history
+    await prisma.alertStatusHistory.create({
+      data: {
+        alertId: alert.id,
+        schoolId,
+        fromStatus: "ACKNOWLEDGED",
+        toStatus: "RESOLVED",
+        changedBy: resolvedById,
+      },
+    })
+
+    res.status(200).json({ success: true, data: alert })
+  } catch (error) { next(error) }
+}

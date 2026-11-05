@@ -1,0 +1,335 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SCHOOL_ADMIN
+  TEACHER
+  PARENT
+}
+
+enum AlertStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+enum ParentLinkStatus {
+  PENDING
+  VERIFIED
+  REVOKED
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+model School {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  email     String?
+  phone     String?
+  address   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships SchoolMembership[]
+  classes     SchoolClass[]
+  learners    Learner[]
+  invitations ParentInvitation[]
+  attendances Attendance[]
+  assessments Assessment[]
+  assessmentResults AssessmentResult[]
+  classTeachers ClassTeacher[]
+  alertRules          AlertRule[]
+  earlyWarningAlerts  EarlyWarningAlert[]
+  alertStatusHistories AlertStatusHistory[]
+}
+
+model User {
+  id           String   @id @default(cuid())
+  firstName    String
+  lastName     String
+  email        String   @unique
+  phone        String?
+  passwordHash String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  memberships SchoolMembership[]
+  parentLinks ParentLearner[]
+  attendances Attendance[]
+  attendanceUpdatedBy Attendance[] @relation("AttendanceUpdatedBy")
+  assessmentResults AssessmentResult[]
+  assessmentResultUpdatedBy AssessmentResult[] @relation("AssessmentResultUpdatedBy")
+}
+
+model SchoolMembership {
+  id        String   @id @default(cuid())
+  schoolId  String
+  userId    String
+  role      UserRole
+  createdAt DateTime @default(now())
+
+  school          School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invitationsSent ParentInvitation[] @relation("InvitationCreator")
+  classTeachers ClassTeacher[]
+
+  @@unique([schoolId, userId])
+  @@unique([schoolId, id])
+  @@index([userId])
+  @@index([schoolId, role])
+}
+
+model SchoolClass {
+  id           String   @id @default(cuid())
+  schoolId     String
+  name         String
+  academicYear String
+  description  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  school   School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  learners Learner[]
+  assessments Assessment[]
+  classTeachers ClassTeacher[]
+  earlyWarningAlerts  EarlyWarningAlert[]
+
+  @@unique([schoolId, name, academicYear])
+  @@unique([schoolId, id])
+  @@index([schoolId])
+}
+
+model Learner {
+  id              String    @id @default(cuid())
+  schoolId        String
+  classId         String
+  firstName       String
+  lastName        String
+  dateOfBirth     DateTime?
+  admissionNumber String
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  school      School      @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  schoolClass SchoolClass @relation(fields: [schoolId, classId], references: [schoolId, id], onDelete: Restrict)
+
+  guardians   ParentLearner[]
+  invitations ParentInvitation[]
+  attendances Attendance[]
+  assessmentResults AssessmentResult[]
+  earlyWarningAlerts  EarlyWarningAlert[]
+
+  @@unique([schoolId, admissionNumber])
+  @@unique([schoolId, id])
+  @@index([schoolId, classId])
+  @@index([lastName, firstName])
+}
+
+model ParentLearner {
+  id                    String           @id @default(cuid())
+  learnerId             String
+  guardianUserId        String
+  relationship          String
+  status                ParentLinkStatus @default(PENDING)
+  verifiedAt            DateTime?
+  whatsappOptInAt       DateTime?
+  whatsappOptOutAt      DateTime?
+  whatsappConsentSource String?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  learner  Learner @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  guardian User    @relation(fields: [guardianUserId], references: [id], onDelete: Cascade)
+
+  @@unique([learnerId, guardianUserId])
+  @@index([guardianUserId, status])
+}
+
+model ParentInvitation {
+  id                    String           @id @default(cuid())
+  schoolId              String
+  learnerId             String
+  invitedByMembershipId String
+  invitedEmail          String?
+  invitedPhone          String?
+  tokenHash             String           @unique
+  status                InvitationStatus @default(PENDING)
+  expiresAt             DateTime
+  acceptedAt            DateTime?
+  createdAt             DateTime         @default(now())
+
+  school              School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  learner             Learner          @relation(fields: [schoolId, learnerId], references: [schoolId, id], onDelete: Cascade)
+  invitedByMembership SchoolMembership @relation("InvitationCreator", fields: [schoolId, invitedByMembershipId], references: [schoolId, id], onDelete: Restrict)
+
+  @@index([schoolId, status])
+  @@index([schoolId, invitedByMembershipId])
+  @@index([learnerId])
+}
+
+model Attendance {
+  id          String         @id @default(cuid())
+  schoolId    String
+  learnerId   String
+  date        DateTime
+  status      AttendanceStatus
+  recordedById String
+  updatedById   String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  school      School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  learner     Learner        @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  recordedBy  User           @relation(fields: [recordedById], references: [id])
+  updatedBy   User?          @relation("AttendanceUpdatedBy", fields: [updatedById], references: [id])
+
+  @@unique([schoolId, learnerId, date])
+  @@index([schoolId, date])
+  @@index([schoolId, learnerId])
+}
+
+model Assessment {
+  id          String   @id @default(cuid())
+  schoolId    String
+  classId     String
+  title       String
+  description String?
+  date        DateTime
+  maxScore    Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  school      School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  schoolClass SchoolClass @relation(fields: [schoolId, classId], references: [schoolId, id], onDelete: Restrict)
+  results     AssessmentResult[]
+
+  @@index([schoolId, classId])
+}
+
+model AssessmentResult {
+  id           String   @id @default(cuid())
+  schoolId     String
+  assessmentId String
+  learnerId    String
+  score        Int
+  recordedById String
+  updatedById    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  school      School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  assessment  Assessment   @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  learner     Learner      @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  recordedBy  User         @relation(fields: [recordedById], references: [id])
+  updatedBy   User?        @relation("AssessmentResultUpdatedBy", fields: [updatedById], references: [id])
+
+  @@unique([schoolId, assessmentId, learnerId])
+  @@index([schoolId, assessmentId])
+  @@index([schoolId, learnerId])
+}
+
+model ClassTeacher {
+  id          String   @id @default(cuid())
+  schoolId    String
+  classId     String
+  membershipId String
+  createdAt   DateTime @default(now())
+
+  school       School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  schoolClass  SchoolClass     @relation(fields: [schoolId, classId], references: [schoolId, id], onDelete: Cascade)
+  membership   SchoolMembership @relation(fields: [schoolId, membershipId], references: [schoolId, id], onDelete: Cascade)
+
+  @@unique([schoolId, classId, membershipId])
+  @@index([membershipId])
+  @@index([schoolId, classId])
+}
+
+model AlertRule {
+  id            String   @id @default(cuid())
+  schoolId      String
+  name          String   @unique
+  alertType     String   // "REPEATED_ABSENCES" or "ACADEMIC_DECLINE"
+  config        Json     // configurable thresholds and parameters
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  earlyWarningAlerts  AlertRule[]
+
+  @@unique([schoolId, name])
+  @@index([schoolId])
+  @@index([alertType])
+}
+
+model EarlyWarningAlert {
+  id                String   @id @default(cuid())
+  schoolId          String
+  learnerId         String?   // optional, for learner-specific alerts
+  classId           String?   // optional, for class-level alerts
+  alertRuleId       String?   // optional, links to AlertRule
+  alertType         String   // "REPEATED_ABSENCES" or "ACADEMIC_DECLINE"
+  status            AlertStatus @default(ACTIVE)
+  evidence          Json     // evidence supporting the alert (absences/dates/scores etc)
+  absencesCount     Int?     // for repeated absences alerts
+  absenceDateRange  String?  // date range supporting the alert
+  declineThreshold  String?  // for academic decline
+  assessmentsCompared Int?   // number of assessments compared
+  lastAssessmentDate DateTime? // last assessment date for decline alerts
+  acknowledgedBy    String?  // user who acknowledged
+  acknowledgedAt    DateTime? // when acknowledged
+  resolvedBy        String?  // user who resolved
+  resolvedAt        DateTime? // when resolved
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  school School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  learner Learner? @relation(fields: [schoolId, learnerId], references: [schoolId, id], onDelete: Cascade)
+  class   SchoolClass? @relation(fields: [schoolId, classId], references: [schoolId, id], onDelete: Cascade)
+  alertRuleId       String   // links to AlertRule (optional)
+  alertStatusHistories AlertStatusHistory[]
+
+  @@unique([schoolId, learnerId, alertRuleId, status])
+  @@index([schoolId, alertType, status])
+  @@index([schoolId, learnerId, status])
+  @@index([schoolId, classId, status])
+}
+
+model AlertStatusHistory {
+  id            String @id @default(cuid())
+  alertId       String
+  schoolId      String
+  fromStatus    AlertStatus
+  toStatus      AlertStatus
+  changedBy     String?  // user who made the change
+  changedAt     DateTime @default(now())
+
+  alert EarlyWarningAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([alertId])
+  @@index([changedAt])
+}
+

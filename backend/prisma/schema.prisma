@@ -13,6 +13,12 @@ enum UserRole {
   PARENT
 }
 
+enum AlertStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+}
+
 enum ParentLinkStatus {
   PENDING
   VERIFIED
@@ -44,14 +50,17 @@ model School {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  memberships SchoolMembership[]
-  classes     SchoolClass[]
-  learners    Learner[]
-  invitations ParentInvitation[]
-  attendances Attendance[]
-  assessments Assessment[]
-  assessmentResults AssessmentResult[]
-  classTeachers ClassTeacher[]
+  memberships          SchoolMembership[]
+  classes              SchoolClass[]
+  learners             Learner[]
+  invitations          ParentInvitation[]
+  attendances          Attendance[]
+  assessments          Assessment[]
+  assessmentResults    AssessmentResult[]
+  classTeachers        ClassTeacher[]
+  alertRules           AlertRule[]
+  earlyWarningAlerts   EarlyWarningAlert[]
+  alertStatusHistories AlertStatusHistory[]
 }
 
 model User {
@@ -65,11 +74,11 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  memberships SchoolMembership[]
-  parentLinks ParentLearner[]
-  attendances Attendance[]
-  attendanceUpdatedBy Attendance[] @relation("AttendanceUpdatedBy")
-  assessmentResults AssessmentResult[]
+  memberships               SchoolMembership[]
+  parentLinks               ParentLearner[]
+  attendances               Attendance[]
+  attendanceUpdatedBy       Attendance[]       @relation("AttendanceUpdatedBy")
+  assessmentResults         AssessmentResult[]
   assessmentResultUpdatedBy AssessmentResult[] @relation("AssessmentResultUpdatedBy")
 }
 
@@ -83,7 +92,7 @@ model SchoolMembership {
   school          School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   invitationsSent ParentInvitation[] @relation("InvitationCreator")
-  classTeachers ClassTeacher[]
+  classTeachers   ClassTeacher[]
 
   @@unique([schoolId, userId])
   @@unique([schoolId, id])
@@ -100,10 +109,11 @@ model SchoolClass {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  school   School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  learners Learner[]
-  assessments Assessment[]
-  classTeachers ClassTeacher[]
+  school             School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  learners           Learner[]
+  assessments        Assessment[]
+  classTeachers      ClassTeacher[]
+  earlyWarningAlerts EarlyWarningAlert[]
 
   @@unique([schoolId, name, academicYear])
   @@unique([schoolId, id])
@@ -122,13 +132,13 @@ model Learner {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  school      School      @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  schoolClass SchoolClass @relation(fields: [schoolId, classId], references: [schoolId, id], onDelete: Restrict)
-
-  guardians   ParentLearner[]
-  invitations ParentInvitation[]
-  attendances Attendance[]
-  assessmentResults AssessmentResult[]
+  school             School              @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  schoolClass        SchoolClass         @relation(fields: [schoolId, classId], references: [schoolId, id], onDelete: Restrict)
+  guardians          ParentLearner[]
+  invitations        ParentInvitation[]
+  attendances        Attendance[]
+  assessmentResults  AssessmentResult[]
+  earlyWarningAlerts EarlyWarningAlert[]
 
   @@unique([schoolId, admissionNumber])
   @@unique([schoolId, id])
@@ -179,20 +189,20 @@ model ParentInvitation {
 }
 
 model Attendance {
-  id          String         @id @default(cuid())
-  schoolId    String
-  learnerId   String
-  date        DateTime
-  status      AttendanceStatus
+  id           String           @id @default(cuid())
+  schoolId     String
+  learnerId    String
+  date         DateTime
+  status       AttendanceStatus
   recordedById String
-  updatedById   String?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  updatedById  String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 
-  school      School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  learner     Learner        @relation(fields: [learnerId], references: [id], onDelete: Cascade)
-  recordedBy  User           @relation(fields: [recordedById], references: [id])
-  updatedBy   User?          @relation("AttendanceUpdatedBy", fields: [updatedById], references: [id])
+  school     School  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  learner    Learner @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  recordedBy User    @relation(fields: [recordedById], references: [id])
+  updatedBy  User?   @relation("AttendanceUpdatedBy", fields: [updatedById], references: [id])
 
   @@unique([schoolId, learnerId, date])
   @@index([schoolId, date])
@@ -210,8 +220,8 @@ model Assessment {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  school      School      @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  schoolClass SchoolClass @relation(fields: [schoolId, classId], references: [schoolId, id], onDelete: Restrict)
+  school      School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  schoolClass SchoolClass        @relation(fields: [schoolId, classId], references: [schoolId, id], onDelete: Restrict)
   results     AssessmentResult[]
 
   @@index([schoolId, classId])
@@ -224,15 +234,15 @@ model AssessmentResult {
   learnerId    String
   score        Int
   recordedById String
-  updatedById    String?
+  updatedById  String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  school      School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  assessment  Assessment   @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
-  learner     Learner      @relation(fields: [learnerId], references: [id], onDelete: Cascade)
-  recordedBy  User         @relation(fields: [recordedById], references: [id])
-  updatedBy   User?        @relation("AssessmentResultUpdatedBy", fields: [updatedById], references: [id])
+  school     School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  assessment Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  learner    Learner    @relation(fields: [learnerId], references: [id], onDelete: Cascade)
+  recordedBy User       @relation(fields: [recordedById], references: [id])
+  updatedBy  User?      @relation("AssessmentResultUpdatedBy", fields: [updatedById], references: [id])
 
   @@unique([schoolId, assessmentId, learnerId])
   @@index([schoolId, assessmentId])
@@ -240,18 +250,83 @@ model AssessmentResult {
 }
 
 model ClassTeacher {
-  id          String   @id @default(cuid())
-  schoolId    String
-  classId     String
+  id           String   @id @default(cuid())
+  schoolId     String
+  classId      String
   membershipId String
-  createdAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
 
-  school       School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  schoolClass  SchoolClass     @relation(fields: [schoolId, classId], references: [schoolId, id], onDelete: Cascade)
-  membership   SchoolMembership @relation(fields: [schoolId, membershipId], references: [schoolId, id], onDelete: Cascade)
+  school      School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  schoolClass SchoolClass      @relation(fields: [schoolId, classId], references: [schoolId, id], onDelete: Cascade)
+  membership  SchoolMembership @relation(fields: [schoolId, membershipId], references: [schoolId, id], onDelete: Cascade)
 
   @@unique([schoolId, classId, membershipId])
   @@index([membershipId])
   @@index([schoolId, classId])
 }
 
+model AlertRule {
+  id        String   @id @default(cuid())
+  schoolId  String
+  name      String
+  alertType String
+  config    Json
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  alerts EarlyWarningAlert[]
+
+  @@unique([schoolId, name])
+  @@index([schoolId])
+  @@index([alertType])
+}
+
+model EarlyWarningAlert {
+  id                  String      @id @default(cuid())
+  schoolId            String
+  learnerId           String?
+  classId             String?
+  alertType           String
+  status              AlertStatus @default(ACTIVE)
+  evidence            Json
+  absencesCount       Int?
+  absenceDateRange    String?
+  declineThreshold    String?
+  assessmentsCompared Int?
+  lastAssessmentDate  DateTime?
+  acknowledgedBy      String?
+  acknowledgedAt      DateTime?
+  resolvedBy          String?
+  resolvedAt          DateTime?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  alertRuleId         String?
+
+  school               School               @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  learner              Learner?             @relation(fields: [schoolId, learnerId], references: [schoolId, id], onDelete: Cascade)
+  class                SchoolClass?         @relation(fields: [schoolId, classId], references: [schoolId, id], onDelete: Cascade)
+  alertRule            AlertRule?           @relation(fields: [alertRuleId], references: [id], onDelete: SetNull)
+  alertStatusHistories AlertStatusHistory[]
+
+  @@index([schoolId, alertType, status])
+  @@index([schoolId, learnerId, status])
+  @@index([schoolId, classId, status])
+}
+
+model AlertStatusHistory {
+  id         String      @id @default(cuid())
+  alertId    String
+  schoolId   String
+  fromStatus AlertStatus
+  toStatus   AlertStatus
+  changedBy  String?
+  changedAt  DateTime    @default(now())
+
+  alert  EarlyWarningAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  school School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([alertId])
+  @@index([changedAt])
+}
