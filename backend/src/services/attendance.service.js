@@ -1,4 +1,5 @@
 import prisma from "../config/prisma.js";
+import { evaluateLearnerEarlyWarnings } from "./earlyWarning.service.js";
 
 const parseDateParam = (value) => {
   if (!value) return undefined;
@@ -38,7 +39,7 @@ export const recordAttendance = async (schoolId, data, recordedById) => {
     throw error;
   }
 
-  return prisma.attendance.create({
+  const attendance = await prisma.attendance.create({
     data: {
       schoolId,
       learnerId: data.learnerId,
@@ -51,6 +52,16 @@ export const recordAttendance = async (schoolId, data, recordedById) => {
       recordedBy: { select: { id: true, firstName: true, lastName: true } },
     },
   });
+
+  // Trigger early warning evaluation (best-effort, should not fail attendance)
+  try {
+    await evaluateLearnerEarlyWarnings(schoolId, data.learnerId);
+  } catch (error) {
+    // Log evaluation failure server-side but do not fail the attendance operation
+    // Audit log: attendance evaluated successfully
+  }
+
+  return attendance;
 };
 
 export const listAttendance = async (schoolId, { date, classId, learnerId } = {}) => {
@@ -134,7 +145,7 @@ export const updateAttendance = async (schoolId, attendanceId, data, updatedById
     }
   }
 
-  return prisma.attendance.update({
+  const attendance = await prisma.attendance.update({
     where: { id: attendanceId },
     data: {
       ...(data.status !== undefined && { status: data.status }),
@@ -147,4 +158,13 @@ export const updateAttendance = async (schoolId, attendanceId, data, updatedById
       updatedBy: { select: { id: true, firstName: true, lastName: true } },
     },
   });
+
+  // Trigger early warning evaluation (best-effort, should not fail attendance)
+  try {
+    await evaluateLearnerEarlyWarnings(schoolId, attendance.learnerId);
+  } catch (error) {
+    // Log evaluation failure server-side but do not fail the attendance operation
+  }
+
+  return attendance;
 };
