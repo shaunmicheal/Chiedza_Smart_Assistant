@@ -2,10 +2,10 @@ export const DEMO_DATA_NOTICE =
   'Demonstration data only — figures and names shown here are not live school records.'
 
 export const dashboardStats = [
-  { label: 'Attendance rate', value: '94.8%', change: '+2.1%', tone: 'positive', icon: 'attendance' },
-  { label: 'Learners at risk', value: '17', change: '-4 this week', tone: 'warning', icon: 'risk' },
-  { label: 'Assessment average', value: '76.4%', change: '+5.3%', tone: 'positive', icon: 'assessment' },
-  { label: 'Parent replies', value: '83%', change: '+9%', tone: 'positive', icon: 'messages' },
+  { label: 'Total learners', value: '324', change: 'Demo total', tone: 'positive', icon: 'learners' },
+  { label: 'Attendance rate', value: '94.8%', change: 'Demo rate', tone: 'positive', icon: 'attendance' },
+  { label: 'Assessment average', value: '76.4%', change: 'Demo average', tone: 'positive', icon: 'assessment' },
+  { label: 'Active early warnings', value: '17', change: 'Demo count', tone: 'warning', icon: 'risk' },
 ]
 
 export const attendanceTrend = [
@@ -48,8 +48,8 @@ export const recentAlerts = [
     time: 'Demo',
   },
   {
-    title: 'Parent message follow-up',
-    detail: 'Example parent messages are available in English and Shona.',
+    title: 'Repeated absences',
+    detail: 'Review another example attendance pattern requiring attention.',
     level: 'info',
     time: 'Demo',
   },
@@ -59,4 +59,10 @@ export const parentMessages = [
   { name: 'Mujuru family', status: 'Reply sent', tone: 'positive' },
   { name: 'Mapuranga family', status: 'Awaiting reply', tone: 'warning' },
   { name: 'Gororo family', status: 'Reviewed', tone: 'positive' },
+]
+
+export const recentActivity = [
+  { title: 'Attendance entries reviewed', detail: 'Example activity · Grade 4A', time: 'Demo' },
+  { title: 'Assessment progress recorded', detail: 'Example activity · Grade 5B', time: 'Demo' },
+  { title: 'Parent message prepared', detail: 'Example activity · English and Shona', time: 'Demo' },
 ]

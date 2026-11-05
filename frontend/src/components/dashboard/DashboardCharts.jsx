@@ -12,12 +12,17 @@ import {
 import { assessmentByClass, attendanceTrend } from '../../data/mock/dashboard'
 import Panel from '../common/Panel'
 
-export function AttendanceChart() {
+export function AttendanceChart({
+  data = attendanceTrend,
+  title = 'Attendance trend',
+  eyebrow = 'Attendance monitoring',
+  ariaLabel = 'Demonstration attendance trend by month',
+}) {
   return (
-    <Panel eyebrow="Attendance monitoring" title="Attendance trend" className="panel-wide">
-      <div className="chart-wrap" role="img" aria-label="Demonstration attendance trend by month">
+    <Panel eyebrow={eyebrow} title={title} className="panel-wide">
+      <div className="chart-wrap" role="img" aria-label={ariaLabel}>
         <ResponsiveContainer width="100%" height={260}>
-          <AreaChart data={attendanceTrend} margin={{ left: -24, right: 12, top: 8, bottom: 0 }}>
+          <AreaChart data={data} margin={{ left: -24, right: 12, top: 8, bottom: 0 }}>
             <defs>
               <linearGradient id="attendanceFill" x1="0" x2="0" y1="0" y2="1">
                 <stop offset="0%" stopColor="#174D3A" stopOpacity={0.28} />
@@ -37,12 +42,17 @@ export function AttendanceChart() {
   )
 }
 
-export function AssessmentChart() {
+export function AssessmentChart({
+  data = assessmentByClass,
+  title = 'Assessment by class',
+  eyebrow = 'Assessment progress',
+  ariaLabel = 'Demonstration assessment averages by class',
+}) {
   return (
-    <Panel eyebrow="Assessment progress" title="Assessment by class">
-      <div className="chart-wrap small-chart" role="img" aria-label="Demonstration assessment averages by class">
+    <Panel eyebrow={eyebrow} title={title}>
+      <div className="chart-wrap small-chart" role="img" aria-label={ariaLabel}>
         <ResponsiveContainer width="100%" height={240}>
-          <BarChart data={assessmentByClass} margin={{ left: -18, right: 12, top: 8, bottom: 0 }}>
+          <BarChart data={data} margin={{ left: -18, right: 12, top: 8, bottom: 0 }}>
             <CartesianGrid stroke="#DCE9DE" vertical={false} />
             <XAxis dataKey="group" tickLine={false} axisLine={false} tick={{ fill: '#5B6B63', fontSize: 11 }} />
             <YAxis tickLine={false} axisLine={false} tick={{ fill: '#5B6B63', fontSize: 11 }} />

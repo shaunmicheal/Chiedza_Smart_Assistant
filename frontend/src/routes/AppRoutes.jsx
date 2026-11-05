@@ -4,11 +4,20 @@ import ParentLayout from '../layouts/ParentLayout'
 import TeacherLayout from '../layouts/TeacherLayout'
 import { pageDescriptions, roleNavigation } from '../data/navigation'
 import DashboardPage from '../pages/admin/DashboardPage'
+import ParentDashboardPage from '../pages/parent/ParentDashboardPage'
+import TeacherDashboardPage from '../pages/teacher/TeacherDashboardPage'
 import NotFoundPage from '../pages/NotFoundPage'
 import PlaceholderPage from '../pages/PlaceholderPage'
 
+const overviewPages = {
+  admin: DashboardPage,
+  teacher: TeacherDashboardPage,
+  parent: ParentDashboardPage,
+}
+
 function roleRoutes(role, Layout) {
   const config = roleNavigation[role]
+  const OverviewPage = overviewPages[role]
   const items = config.sections.flatMap((section) => section.items)
 
   return (
@@ -19,8 +28,8 @@ function roleRoutes(role, Layout) {
           key={item.path}
           path={item.path.slice(config.basePath.length + 1)}
           element={
-            item.overview && role === 'admin' ? (
-              <DashboardPage />
+            item.overview ? (
+              <OverviewPage />
             ) : (
               <PlaceholderPage page={{ ...item, description: pageDescriptions[item.path] }} />
             )

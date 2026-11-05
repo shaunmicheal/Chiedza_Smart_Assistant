@@ -1,23 +1,17 @@
-import {
-  ArrowUpRight,
-  CalendarCheck2,
-  MessageSquareText,
-  ShieldCheck,
-  UserRound,
-} from 'lucide-react'
 import { Link } from 'react-router-dom'
 import {
   DEMO_DATA_NOTICE,
   dashboardStats,
   parentMessages,
+  recentActivity,
   recentAlerts,
   riskLearners,
 } from '../../data/mock/dashboard'
 import AlertItem from '../../components/dashboard/AlertItem'
 import { AssessmentChart, AttendanceChart } from '../../components/dashboard/DashboardCharts'
-import DashboardHero from '../../components/dashboard/DashboardHero'
 import LearnerSummaryRow from '../../components/dashboard/LearnerSummaryRow'
 import ParentMessageRow from '../../components/dashboard/ParentMessageRow'
+import RecentActivityItem from '../../components/dashboard/RecentActivityItem'
 import StatCard from '../../components/dashboard/StatCard'
 import Panel from '../../components/common/Panel'
 
@@ -25,17 +19,16 @@ function DashboardPage() {
   return (
     <main className="content">
       <p className="demo-notice" role="note">{DEMO_DATA_NOTICE}</p>
-      <DashboardHero />
 
-      <section className="stats-grid" aria-label="School overview statistics">
+      <section className="stats-grid" aria-label="School-level overview">
         {dashboardStats.map((stat) => <StatCard key={stat.label} {...stat} />)}
       </section>
 
-      <section className="panel-grid panels-top" aria-label="Attendance and early warnings">
+      <section className="panel-grid panels-top" aria-label="Attendance and active early warnings">
         <AttendanceChart />
         <Panel
-          eyebrow="Needs review"
-          title="Recent alerts"
+          eyebrow="School-level overview"
+          title="Active early-warning alerts"
           action={<Link className="link-button" to="/admin/early-warnings">View all</Link>}
         >
           <ul className="alert-list">
@@ -57,7 +50,7 @@ function DashboardPage() {
         </Panel>
       </section>
 
-      <section className="bottom-grid" aria-label="Learner support and quick actions">
+      <section className="bottom-grid" aria-label="Learner support and recent activity">
         <Panel
           eyebrow="Attendance and assessment patterns"
           title="Learners to review"
@@ -67,29 +60,10 @@ function DashboardPage() {
             {riskLearners.map((learner) => <LearnerSummaryRow key={learner.name} {...learner} />)}
           </ul>
         </Panel>
-        <Panel eyebrow="Quick actions" title="Staff workflow">
-          <div className="action-stack">
-            <Link className="action-button" to="/admin/attendance">
-              <CalendarCheck2 size={18} aria-hidden="true" />
-              Review attendance
-              <ArrowUpRight size={15} aria-hidden="true" />
-            </Link>
-            <Link className="action-button" to="/admin/assessments">
-              <UserRound size={18} aria-hidden="true" />
-              Record assessment progress
-              <ArrowUpRight size={15} aria-hidden="true" />
-            </Link>
-            <Link className="action-button" to="/admin/parent-communication">
-              <MessageSquareText size={18} aria-hidden="true" />
-              Prepare a parent message
-              <ArrowUpRight size={15} aria-hidden="true" />
-            </Link>
-            <Link className="action-button" to="/admin/early-warnings">
-              <ShieldCheck size={18} aria-hidden="true" />
-              Review early warnings
-              <ArrowUpRight size={15} aria-hidden="true" />
-            </Link>
-          </div>
+        <Panel eyebrow="Recent activity" title="School activity">
+          <ul className="activity-list">
+            {recentActivity.map((item) => <RecentActivityItem key={item.title} {...item} />)}
+          </ul>
         </Panel>
       </section>
     </main>

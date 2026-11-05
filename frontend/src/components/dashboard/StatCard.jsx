@@ -1,10 +1,17 @@
-import { AlertTriangle, CalendarCheck2, GraduationCap, MessageSquareText } from 'lucide-react'
+import {
+  AlertTriangle,
+  CalendarCheck2,
+  GraduationCap,
+  MessageSquareText,
+  Users,
+} from 'lucide-react'
 
 const icons = {
   attendance: CalendarCheck2,
   risk: AlertTriangle,
   assessment: GraduationCap,
   messages: MessageSquareText,
+  learners: Users,
 }
 
 function StatCard({ label, value, change, tone, icon }) {
