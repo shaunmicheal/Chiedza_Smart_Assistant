@@ -250,6 +250,10 @@ export const listAlerts = async (req, res, next) => {
       ...(status && { status }),
     };
 
+    if (!["SCHOOL_ADMIN", "TEACHER"].includes(req.role)) {
+      throw createError("You do not have permission to view alerts.", 403);
+    }
+
     if (req.role === "TEACHER") {
       const assignedClassIds = await getTeacherClassIds(prisma, req);
 
@@ -260,13 +264,16 @@ export const listAlerts = async (req, res, next) => {
         });
       }
 
+      if (assignedClassIds.length === 0) {
+        return res.status(200).json({
+          success: true,
+          data: [],
+        });
+      }
+
       where.classId = {
         in: classId ? [classId] : assignedClassIds,
       };
-    }
-
-    if (req.role !== "SCHOOL_ADMIN") {
-      throw createError("You do not have permission to view alerts.", 403);
     }
 
     const alerts = await prisma.earlyWarningAlert.findMany({

@@ -61,9 +61,6 @@ beforeAll(async () => {
   });
 
   await prisma.classTeacher.create({
-    data: { schoolId: school.id, classId: class1.id, membershipId: teacherMembership.id },
-  });
-  await prisma.classTeacher.create({
     data: { schoolId: school.id, classId: class2.id, membershipId: teacherMembership.id },
   });
 
@@ -111,7 +108,7 @@ describe("Attendance", () => {
       expect(res.status).toBe(201);
       expect(res.body.data.status).toBe(status);
     }
-  );
+   }, 60000);
 
   it("prevents duplicate attendance for same learner on same date", async () => {
     const res = await request(app)

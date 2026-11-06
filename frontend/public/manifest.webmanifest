@@ -1,0 +1,25 @@
+{
+  "id": "/",
+  "name": "Chiedza Smart Assistant",
+  "short_name": "Chiedza",
+  "description": "School management, learner progress monitoring and parent communication.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F7F4EA",
+  "theme_color": "#174D3A",
+  "icons": [
+    {
+      "src": "/icons/chiedza-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/chiedza-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

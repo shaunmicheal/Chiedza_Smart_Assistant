@@ -2297,3 +2297,115 @@ button:disabled {
     font-size: 1.45rem;
   }
 }
+
+/* Workspace scrolling and authenticated sidebar profile */
+.app-shell {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sidebar {
+  position: relative;
+  top: auto;
+  flex: 0 0 280px;
+  width: 280px;
+  height: 100%;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.main-panel {
+  flex: 1 1 auto;
+  width: 0;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.profile-card {
+  min-width: 0;
+}
+
+.profile-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-details strong,
+.profile-details span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-details .profile-role {
+  margin-top: 3px;
+  color: var(--forest);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+@media (min-width: 761px) and (max-width: 1080px) {
+  .sidebar {
+    flex-basis: 250px;
+    width: 250px;
+  }
+
+  .nav-groups {
+    flex-direction: column;
+    flex-wrap: nowrap;
+  }
+
+  .nav-group {
+    flex: 0 0 auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .app-shell {
+    display: block;
+    width: 100%;
+    height: auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
+  .sidebar {
+    position: relative;
+    width: 100%;
+    height: auto;
+    min-height: auto;
+    overflow: visible;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .main-panel {
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .topbar {
+    position: sticky;
+    top: 0;
+  }
+}
