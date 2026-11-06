@@ -6,6 +6,8 @@ import TeacherLayout from '../layouts/TeacherLayout'
 import { pageDescriptions, roleNavigation } from '../data/navigation'
 import NotFoundPage from '../pages/NotFoundPage'
 import PlaceholderPage from '../pages/PlaceholderPage'
+import ProtectedRoute from '../components/auth/ProtectedRoute'
+import { useAuth } from '../context/useAuth'
 
 const DashboardPage = lazy(() => import('../pages/admin/DashboardPage'))
 const TeacherDashboardPage = lazy(() => import('../pages/teacher/TeacherDashboardPage'))
@@ -30,6 +32,18 @@ const overviewPages = {
   admin: DashboardPage,
   teacher: TeacherDashboardPage,
   parent: ParentDashboardPage,
+}
+
+const backendRoles = {
+  admin: 'SCHOOL_ADMIN',
+  teacher: 'TEACHER',
+  parent: 'PARENT',
+}
+
+const roleHome = {
+  SCHOOL_ADMIN: '/admin/overview',
+  TEACHER: '/teacher/overview',
+  PARENT: '/parent/overview',
 }
 
 const routePages = {
@@ -63,10 +77,20 @@ function roleRoutes(role, Layout) {
   const items = config.sections.flatMap((section) => section.items)
 
   return (
-    <Route key={role} path={config.basePath.slice(1)} element={<Layout />}>
+    <Route
+      key={role}
+      path={config.basePath.slice(1)}
+      element={
+        <ProtectedRoute role={backendRoles[role]}>
+          <Layout />
+        </ProtectedRoute>
+      }
+    >
       <Route index element={<Navigate to="overview" replace />} />
+
       {items.map((item) => {
         const [Page, pageProps = {}] = routePages[item.path] ?? []
+
         const Element = item.overview
           ? <OverviewPage />
           : Page
@@ -94,16 +118,28 @@ function LoadingPage() {
   )
 }
 
+function HomeRedirect() {
+  const { user, loading } = useAuth()
+
+  if (loading) return <LoadingPage />
+  if (!user) return <Navigate to="/login" replace />
+
+  const role = user.memberships?.[0]?.role
+  return <Navigate to={roleHome[role] || '/login'} replace />
+}
+
 function AppRoutes() {
   return (
     <Suspense fallback={<LoadingPage />}>
       <Routes>
-        <Route path="/" element={<Navigate to="/admin/overview" replace />} />
+        <Route path="/" element={<HomeRedirect />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/activate" element={<ActivationPage />} />
+
         {roleRoutes('admin', AdminLayout)}
         {roleRoutes('teacher', TeacherLayout)}
         {roleRoutes('parent', ParentLayout)}
+
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Suspense>
