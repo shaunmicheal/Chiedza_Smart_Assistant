@@ -13,11 +13,16 @@ export const recordAttendance = async (req, res, next) => {
 
 export const listAttendance = async (req, res, next) => {
   try {
-    const data = await attendanceService.listAttendance(req.schoolId, {
-      date: req.query.date,
-      classId: req.query.classId,
-      learnerId: req.query.learnerId,
-    });
+    const membershipId = req.role === 'TEACHER' ? req.membership?.id : undefined;
+    const data = await attendanceService.listAttendance(
+      req.schoolId,
+      {
+        date: req.query.date,
+        classId: req.query.classId,
+        learnerId: req.query.learnerId,
+      },
+      membershipId
+    );
     res.status(200).json({ success: true, data });
   } catch (error) { next(error); }
 };

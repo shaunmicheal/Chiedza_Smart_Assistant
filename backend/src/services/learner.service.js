@@ -12,9 +12,40 @@ const parseDate = (value) => {
   return d;
 };
 
-export const listLearners = async (schoolId, { classId } = {}) => {
+/**
+ * Get the class IDs assigned to a teacher within a school.
+ */
+const getTeacherClassIds = async (schoolId, membershipId) => {
+  const assignments = await prisma.classTeacher.findMany({
+    where: {
+      schoolId,
+      membershipId,
+    },
+    select: {
+      classId: true,
+    },
+  });
+
+  return assignments.map((assignment) => assignment.classId);
+};
+
+export const listLearners = async (schoolId, { classId } = {}, membershipId) => {
   const where = { schoolId };
-  if (classId) where.classId = classId;
+
+  if (classId) {
+    where.classId = classId;
+  } else if (membershipId) {
+    // Teachers can only see learners in their assigned classes.
+    const teacherClassIds = await getTeacherClassIds(schoolId, membershipId);
+
+    if (teacherClassIds.length === 0) {
+      return [];
+    }
+
+    where.classId = { in: teacherClassIds };
+  }
+  // Admins without a membership filter can see all school learners.
+
   return prisma.learner.findMany({
     where,
     include: { schoolClass: true },

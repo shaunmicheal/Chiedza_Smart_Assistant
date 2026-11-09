@@ -12,6 +12,23 @@ const parseDateParam = (value) => {
   return d;
 };
 
+/**
+ * Get the class IDs assigned to a teacher within a school.
+ */
+const getTeacherClassIds = async (schoolId, membershipId) => {
+  const assignments = await prisma.classTeacher.findMany({
+    where: {
+      schoolId,
+      membershipId,
+    },
+    select: {
+      classId: true,
+    },
+  });
+
+  return assignments.map((assignment) => assignment.classId);
+};
+
 export const recordAttendance = async (schoolId, data, recordedById) => {
   // Verify learner belongs to this school
   const learner = await prisma.learner.findFirst({
@@ -64,10 +81,27 @@ export const recordAttendance = async (schoolId, data, recordedById) => {
   return attendance;
 };
 
-export const listAttendance = async (schoolId, { date, classId, learnerId } = {}) => {
+export const listAttendance = async (schoolId, { date, classId, learnerId } = {}, membershipId) => {
   const where = { schoolId };
+
+  // If classId is provided, filter by that class
+  if (classId) {
+    where.learner = { classId };
+  } else if (membershipId) {
+    // No classId provided but teacher has membership - filter by teacher's assigned classes
+    const teacherClassIds = await getTeacherClassIds(schoolId, membershipId);
+    if (teacherClassIds.length > 0) {
+      where.learner = { classId: { in: teacherClassIds } };
+    }
+    // If teacher has no assigned classes, return empty array immediately
+    // Do not use equals: null workaround; return early
+    if (teacherClassIds.length === 0) {
+      return [];
+    }
+  }
+  // If no classId and no membershipId (admin), return all records
+
   if (date) where.date = parseDateParam(date);
-  if (classId) where.learner = { classId };
   if (learnerId) where.learnerId = learnerId;
 
   return prisma.attendance.findMany({

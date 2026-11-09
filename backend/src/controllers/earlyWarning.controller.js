@@ -242,16 +242,9 @@ export const listAlerts = async (req, res, next) => {
     const { alertType, learnerId, classId, status } =
       req.validated?.query || req.query;
 
-    const where = {
-      schoolId: req.schoolId,
-      ...(alertType && { alertType }),
-      ...(learnerId && { learnerId }),
-      ...(classId && { classId }),
-      ...(status && { status }),
-    };
-
-    if (!["SCHOOL_ADMIN", "TEACHER"].includes(req.role)) {
-      throw createError("You do not have permission to view alerts.", 403);
+    // Explicit role-based access control before any data fetching.
+    if (req.role === "PARENT") {
+      return next(createError("You do not have permission to view alerts.", 403));
     }
 
     if (req.role === "TEACHER") {
@@ -265,16 +258,49 @@ export const listAlerts = async (req, res, next) => {
       }
 
       if (assignedClassIds.length === 0) {
+        // Teacher with no assigned classes receives an empty list.
         return res.status(200).json({
           success: true,
           data: [],
         });
       }
 
-      where.classId = {
-        in: classId ? [classId] : assignedClassIds,
+      const where = {
+        schoolId: req.schoolId,
+        ...(alertType && { alertType }),
+        ...(learnerId && { learnerId }),
+        ...(classId && { classId }),
+        ...(status && { status }),
+        classId: { in: assignedClassIds },
       };
+
+      const alerts = await prisma.earlyWarningAlert.findMany({
+        where,
+        include: alertInclude,
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+
+      res.status(200).json({
+        success: true,
+        data: alerts,
+      });
+      return;
     }
+
+    // SCHOOL_ADMIN has full school-wide access.
+    if (req.role !== "SCHOOL_ADMIN") {
+      return next(createError("You do not have permission to view alerts.", 403));
+    }
+
+    const where = {
+      schoolId: req.schoolId,
+      ...(alertType && { alertType }),
+      ...(learnerId && { learnerId }),
+      ...(classId && { classId }),
+      ...(status && { status }),
+    };
 
     const alerts = await prisma.earlyWarningAlert.findMany({
       where,

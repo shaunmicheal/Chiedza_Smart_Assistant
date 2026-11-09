@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { authenticate } from "../middleware/authenticate.js";
 import { requireRole, requireSchoolMembership } from "../middleware/authorize.js";
+import { requireClassAccess } from "../middleware/requireClassAccess.js";
 import { validate } from "../middleware/validate.js";
 import * as schoolCtrl from "../controllers/school.controller.js";
 import * as teacherCtrl from "../controllers/teacher.controller.js";
@@ -33,15 +34,15 @@ router.get("/:schoolId/teachers/:membershipId", validate(schoolAndIdParamSchema(
 router.patch("/:schoolId/teachers/:membershipId", validate(updateTeacherSchema), requireSchoolMembership, requireRole("SCHOOL_ADMIN"), teacherCtrl.updateTeacher);
 router.delete("/:schoolId/teachers/:membershipId", validate(schoolAndIdParamSchema("membershipId")), requireSchoolMembership, requireRole("SCHOOL_ADMIN"), teacherCtrl.removeTeacher);
 
-router.get("/:schoolId/classes", validate(schoolIdParamSchema), requireSchoolMembership, classCtrl.listClasses);
+router.get("/:schoolId/classes", validate(schoolIdParamSchema), requireSchoolMembership, requireClassAccess, classCtrl.listClasses);
 router.post("/:schoolId/classes", validate(createClassSchema), requireSchoolMembership, requireRole("SCHOOL_ADMIN"), classCtrl.createClass);
-router.get("/:schoolId/classes/:classId", validate(schoolAndIdParamSchema("classId")), requireSchoolMembership, classCtrl.getClass);
+router.get("/:schoolId/classes/:classId", validate(schoolAndIdParamSchema("classId")), requireSchoolMembership, requireClassAccess, classCtrl.getClass);
 router.patch("/:schoolId/classes/:classId", validate(updateClassSchema), requireSchoolMembership, requireRole("SCHOOL_ADMIN"), classCtrl.updateClass);
 router.delete("/:schoolId/classes/:classId", validate(schoolAndIdParamSchema("classId")), requireSchoolMembership, requireRole("SCHOOL_ADMIN"), classCtrl.removeClass);
 
-router.get("/:schoolId/learners", validate(listLearnersQuerySchema), requireSchoolMembership, learnerCtrl.listLearners);
+router.get("/:schoolId/learners", validate(listLearnersQuerySchema), requireSchoolMembership, requireClassAccess, learnerCtrl.listLearners);
 router.post("/:schoolId/learners", validate(createLearnerSchema), requireSchoolMembership, requireRole("SCHOOL_ADMIN"), learnerCtrl.createLearner);
-router.get("/:schoolId/learners/:learnerId", validate(schoolAndIdParamSchema("learnerId")), requireSchoolMembership, learnerCtrl.getLearner);
+router.get("/:schoolId/learners/:learnerId", validate(schoolAndIdParamSchema("learnerId")), requireSchoolMembership, requireClassAccess, learnerCtrl.getLearner);
 router.patch("/:schoolId/learners/:learnerId", validate(updateLearnerSchema), requireSchoolMembership, requireRole("SCHOOL_ADMIN"), learnerCtrl.updateLearner);
 router.delete("/:schoolId/learners/:learnerId", validate(schoolAndIdParamSchema("learnerId")), requireSchoolMembership, requireRole("SCHOOL_ADMIN"), learnerCtrl.removeLearner);
 

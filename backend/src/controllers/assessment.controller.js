@@ -13,9 +13,12 @@ export const createAssessment = async (req, res, next) => {
 
 export const listAssessments = async (req, res, next) => {
   try {
-    const data = await assessmentService.listAssessments(req.schoolId, {
-      classId: req.query.classId,
-    });
+    const membershipId = req.role === 'TEACHER' ? req.membership?.id : undefined;
+    const data = await assessmentService.listAssessments(
+      req.schoolId,
+      { classId: req.query.classId },
+      membershipId
+    );
     res.status(200).json({ success: true, data });
   } catch (error) { next(error); }
 };

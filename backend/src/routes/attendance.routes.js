@@ -83,6 +83,7 @@ router.get(
   "/attendance",
   validate(listAttendanceQuerySchema),
   requireSchoolMembership,
+  requireClassAccess,
   attendanceCtrl.listAttendance,
 );
 
@@ -91,6 +92,7 @@ router.get(
   "/learners/:learnerId/attendance",
   validate(schoolAndIdParamSchema("learnerId")),
   requireSchoolMembership,
+  requireClassAccess,
   attendanceCtrl.getAttendanceByLearner,
 );
 
@@ -99,6 +101,7 @@ router.get(
   "/attendance/:attendanceId",
   validate(schoolAndIdParamSchema("attendanceId")),
   requireSchoolMembership,
+  requireClassAccess,
   attendanceCtrl.getAttendanceById,
 );
 

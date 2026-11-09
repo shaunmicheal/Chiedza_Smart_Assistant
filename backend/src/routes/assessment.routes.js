@@ -109,6 +109,7 @@ router.get(
   "/assessments",
   validate(listAssessmentsQuerySchema),
   requireSchoolMembership,
+  requireClassAccess,
   assessmentCtrl.listAssessments,
 );
 
@@ -117,6 +118,7 @@ router.get(
   "/assessments/:assessmentId",
   validate(schoolAndIdParamSchema("assessmentId")),
   requireSchoolMembership,
+  requireClassAccess,
   assessmentCtrl.getAssessmentById,
 );
 
@@ -143,6 +145,7 @@ router.get(
   "/assessments/:assessmentId/results",
   validate(listAssessmentResultsQuerySchema),
   requireSchoolMembership,
+  requireClassAccess,
   assessmentCtrl.listAssessmentResults,
 );
 
@@ -151,6 +154,7 @@ router.get(
   "/learners/:learnerId/assessments",
   validate(listLearnerAssessmentsQuerySchema),
   requireSchoolMembership,
+  requireClassAccess,
   assessmentCtrl.getLearnerAssessments,
 );
 

@@ -7,8 +7,10 @@ const PASSWORD = "password123";
 const SCHOOL_SLUG = "stage3-attendance-school";
 const ADMIN_EMAIL = "s3a-admin@test.chiedza.local";
 const TEACHER_EMAIL = "s3a-teacher@test.chiedza.local";
+const ZERO_TEACHER_EMAIL = "s3a-zero-teacher@test.chiedza.local";
 
-let school, adminUser, teacherUser, class1, class2, learner1, learner2, adminToken, teacherToken;
+let school, adminUser, teacherUser, teacherZeroUser, class1, class2, learner1, learner2;
+let adminToken, teacherToken, teacherZeroToken;
 
 const cleanup = async () => {
   const s = await prisma.school.findUnique({ where: { slug: SCHOOL_SLUG } });
@@ -23,7 +25,7 @@ const cleanup = async () => {
     await prisma.school.delete({ where: { id: s.id } });
   }
   await prisma.user.deleteMany({
-    where: { email: { in: [ADMIN_EMAIL, TEACHER_EMAIL] } },
+    where: { email: { in: [ADMIN_EMAIL, TEACHER_EMAIL, ZERO_TEACHER_EMAIL] } },
   });
 };
 
@@ -38,12 +40,20 @@ beforeAll(async () => {
   teacherUser = await prisma.user.create({
     data: { firstName: "Teacher", lastName: "User", email: TEACHER_EMAIL, passwordHash: hash },
   });
+  teacherZeroUser = await prisma.user.create({
+    data: { firstName: "Unassigned", lastName: "Teacher", email: ZERO_TEACHER_EMAIL, passwordHash: hash },
+  });
 
   await prisma.schoolMembership.create({
     data: { schoolId: school.id, userId: adminUser.id, role: "SCHOOL_ADMIN" },
   });
   const teacherMembership = await prisma.schoolMembership.create({
     data: { schoolId: school.id, userId: teacherUser.id, role: "TEACHER" },
+  });
+
+  // Zero-class teacher membership - no classTeacher records will be created
+  const teacherZeroMembership = await prisma.schoolMembership.create({
+    data: { schoolId: school.id, userId: teacherZeroUser.id, role: "TEACHER" },
   });
 
   class1 = await prisma.schoolClass.create({
@@ -60,6 +70,7 @@ beforeAll(async () => {
     data: { schoolId: school.id, classId: class2.id, firstName: "Bob", lastName: "Ncube", admissionNumber: "A-002" },
   });
 
+  // The regular teacher is assigned to class2 only.
   await prisma.classTeacher.create({
     data: { schoolId: school.id, classId: class2.id, membershipId: teacherMembership.id },
   });
@@ -68,12 +79,14 @@ beforeAll(async () => {
   adminToken = loginAdmin.body.data.token;
   const loginTeacher = await request(app).post("/api/auth/login").send({ email: TEACHER_EMAIL, password: PASSWORD });
   teacherToken = loginTeacher.body.data.token;
-});
+  const loginTeacherZero = await request(app).post("/api/auth/login").send({ email: ZERO_TEACHER_EMAIL, password: PASSWORD });
+  teacherZeroToken = loginTeacherZero.body.data.token;
+  });
 
 afterAll(async () => {
   await cleanup();
   await prisma.$disconnect();
-});
+  });
 
 describe("Attendance", () => {
   it("unauthenticated request returns 401", async () => {
@@ -108,7 +121,7 @@ describe("Attendance", () => {
       expect(res.status).toBe(201);
       expect(res.body.data.status).toBe(status);
     }
-   }, 60000);
+  });
 
   it("prevents duplicate attendance for same learner on same date", async () => {
     const res = await request(app)
@@ -176,13 +189,25 @@ describe("Attendance", () => {
     expect(res.status).toBe(403);
   });
 
-  it("teacher with no assigned classes receives empty list", async () => {
+  it("teacher with zero assigned classes returns empty attendance list", async () => {
+    // Teacher with no class assignments (teacherZeroMembership has no classTeacher records)
+    // should return an empty array.
     const res = await request(app)
       .get(`/api/schools/${school.id}/attendance`)
-      .set("Authorization", `Bearer ${teacherToken}`)
-      .query({ classId: "non-existent-class" })
+      .set("Authorization", `Bearer ${teacherZeroToken}`);
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(0);
+  });
+
+  it("teacher with assigned classes sees only their class records", async () => {
+    // Teacher with class assignments should see only their class records
+    const res = await request(app)
+      .get(`/api/schools/${school.id}/attendance`)
+      .set("Authorization", `Bearer ${teacherToken}`);
+    expect(res.status).toBe(200);
+    // The teacher is assigned to class2 only.
+    expect(res.body.data.length).toBeGreaterThan(0);
+    expect(res.body.data.every((record) => record.learnerId === learner2.id)).toBe(true);
   });
 
   it("cross-school: admin cannot record attendance in another school", async () => {
@@ -202,4 +227,4 @@ describe("Attendance", () => {
       .send({ learnerId: "nonexistent-learner-id", date: "2026-04-01", status: "PRESENT" });
     expect(res.status).toBe(404);
   });
-});
+  });

@@ -2,9 +2,12 @@ import * as learnerService from "../services/learner.service.js";
 
 export const listLearners = async (req, res, next) => {
   try {
-    const data = await learnerService.listLearners(req.params.schoolId, {
-      classId: req.query.classId,
-    });
+    const membershipId = req.role === 'TEACHER' ? req.membership?.id : undefined;
+    const data = await learnerService.listLearners(
+      req.params.schoolId,
+      { classId: req.query.classId },
+      membershipId
+    );
     res.status(200).json({ success: true, data });
   } catch (error) { next(error); }
 };

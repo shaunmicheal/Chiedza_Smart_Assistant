@@ -7,11 +7,15 @@ const PASSWORD = "password123";
 const SCHOOL_SLUG = "stage3-assessment-school";
 const ADMIN_EMAIL = "s3b-admin@test.chiedza.local";
 const TEACHER_EMAIL = "s3b-teacher@test.chiedza.local";
+const ZERO_TEACHER_EMAIL = "s3b-zero-teacher@test.chiedza.local";
 
-let school, adminUser, teacherUser, class1, learner1, learner2, assessment1, adminToken, teacherToken;
+let school, adminUser, teacherUser, teacherZeroUser;
+let class1, class2, learner1, learner2, assessment1;
+let adminToken, teacherToken, teacherZeroToken;
 
 const cleanup = async () => {
   const s = await prisma.school.findUnique({ where: { slug: SCHOOL_SLUG } });
+
   if (s) {
     await prisma.classTeacher.deleteMany({ where: { schoolId: s.id } });
     await prisma.assessmentResult.deleteMany({ where: { schoolId: s.id } });
@@ -22,43 +26,121 @@ const cleanup = async () => {
     await prisma.schoolMembership.deleteMany({ where: { schoolId: s.id } });
     await prisma.school.delete({ where: { id: s.id } });
   }
+
   await prisma.user.deleteMany({
-    where: { email: { in: [ADMIN_EMAIL, TEACHER_EMAIL] } },
+    where: {
+      email: {
+        in: [ADMIN_EMAIL, TEACHER_EMAIL, ZERO_TEACHER_EMAIL],
+      },
+    },
   });
 };
 
 beforeAll(async () => {
   await cleanup();
+
   const hash = await hashPassword(PASSWORD);
-  school = await prisma.school.create({ data: { name: "Stage3 Assessment School", slug: SCHOOL_SLUG } });
+
+  school = await prisma.school.create({
+    data: {
+      name: "Stage3 Assessment School",
+      slug: SCHOOL_SLUG,
+    },
+  });
 
   adminUser = await prisma.user.create({
-    data: { firstName: "Admin", lastName: "User", email: ADMIN_EMAIL, passwordHash: hash },
+    data: {
+      firstName: "Admin",
+      lastName: "User",
+      email: ADMIN_EMAIL,
+      passwordHash: hash,
+    },
   });
+
   teacherUser = await prisma.user.create({
-    data: { firstName: "Teacher", lastName: "User", email: TEACHER_EMAIL, passwordHash: hash },
+    data: {
+      firstName: "Teacher",
+      lastName: "User",
+      email: TEACHER_EMAIL,
+      passwordHash: hash,
+    },
+  });
+
+  teacherZeroUser = await prisma.user.create({
+    data: {
+      firstName: "Unassigned",
+      lastName: "Teacher",
+      email: ZERO_TEACHER_EMAIL,
+      passwordHash: hash,
+    },
   });
 
   await prisma.schoolMembership.create({
-    data: { schoolId: school.id, userId: adminUser.id, role: "SCHOOL_ADMIN" },
+    data: {
+      schoolId: school.id,
+      userId: adminUser.id,
+      role: "SCHOOL_ADMIN",
+    },
   });
+
   const teacherMembership = await prisma.schoolMembership.create({
-    data: { schoolId: school.id, userId: teacherUser.id, role: "TEACHER" },
+    data: {
+      schoolId: school.id,
+      userId: teacherUser.id,
+      role: "TEACHER",
+    },
+  });
+
+  await prisma.schoolMembership.create({
+    data: {
+      schoolId: school.id,
+      userId: teacherZeroUser.id,
+      role: "TEACHER",
+    },
   });
 
   class1 = await prisma.schoolClass.create({
-    data: { schoolId: school.id, name: "Grade 1", academicYear: "2026" },
+    data: {
+      schoolId: school.id,
+      name: "Grade 1",
+      academicYear: "2026",
+    },
+  });
+
+  class2 = await prisma.schoolClass.create({
+    data: {
+      schoolId: school.id,
+      name: "Grade 2",
+      academicYear: "2026",
+    },
   });
 
   learner1 = await prisma.learner.create({
-    data: { schoolId: school.id, classId: class1.id, firstName: "Alice", lastName: "Moyo", admissionNumber: "A-001" },
+    data: {
+      schoolId: school.id,
+      classId: class1.id,
+      firstName: "Alice",
+      lastName: "Moyo",
+      admissionNumber: "A-001",
+    },
   });
+
   learner2 = await prisma.learner.create({
-    data: { schoolId: school.id, classId: class1.id, firstName: "Bob", lastName: "Ncube", admissionNumber: "A-002" },
+    data: {
+      schoolId: school.id,
+      classId: class1.id,
+      firstName: "Bob",
+      lastName: "Ncube",
+      admissionNumber: "A-002",
+    },
   });
 
   await prisma.classTeacher.create({
-    data: { schoolId: school.id, classId: class1.id, membershipId: teacherMembership.id },
+    data: {
+      schoolId: school.id,
+      classId: class1.id,
+      membershipId: teacherMembership.id,
+    },
   });
 
   assessment1 = await prisma.assessment.create({
@@ -72,10 +154,23 @@ beforeAll(async () => {
     },
   });
 
-  const loginAdmin = await request(app).post("/api/auth/login").send({ email: ADMIN_EMAIL, password: PASSWORD });
+  const loginAdmin = await request(app)
+    .post("/api/auth/login")
+    .send({ email: ADMIN_EMAIL, password: PASSWORD });
+
   adminToken = loginAdmin.body.data.token;
-  const loginTeacher = await request(app).post("/api/auth/login").send({ email: TEACHER_EMAIL, password: PASSWORD });
+
+  const loginTeacher = await request(app)
+    .post("/api/auth/login")
+    .send({ email: TEACHER_EMAIL, password: PASSWORD });
+
   teacherToken = loginTeacher.body.data.token;
+
+  const loginTeacherZero = await request(app)
+    .post("/api/auth/login")
+    .send({ email: ZERO_TEACHER_EMAIL, password: PASSWORD });
+
+  teacherZeroToken = loginTeacherZero.body.data.token;
 });
 
 afterAll(async () => {
@@ -85,12 +180,15 @@ afterAll(async () => {
 
 describe("Assessments", () => {
   it("unauthenticated request returns 401", async () => {
-    const res = await request(app).post("/api/schools/" + school.id + "/assessments").send({
-      classId: class1.id,
-      title: "Science Quiz",
-      date: "2026-02-01",
-      maxScore: 50,
-    });
+    const res = await request(app)
+      .post("/api/schools/" + school.id + "/assessments")
+      .send({
+        classId: class1.id,
+        title: "Science Quiz",
+        date: "2026-02-01",
+        maxScore: 50,
+      });
+
     expect(res.status).toBe(401);
   });
 
@@ -105,6 +203,7 @@ describe("Assessments", () => {
         date: "2026-02-01",
         maxScore: 50,
       });
+
     expect(res.status).toBe(201);
     expect(res.body.data.title).toBe("Science Quiz");
     expect(res.body.data.maxScore).toBe(50);
@@ -114,6 +213,7 @@ describe("Assessments", () => {
     const res = await request(app)
       .get("/api/schools/" + school.id + "/assessments?classId=" + class1.id)
       .set("Authorization", "Bearer " + adminToken);
+
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.data)).toBe(true);
     expect(res.body.data.length).toBeGreaterThan(0);
@@ -123,6 +223,7 @@ describe("Assessments", () => {
     const res = await request(app)
       .get("/api/schools/" + school.id + "/assessments/" + assessment1.id)
       .set("Authorization", "Bearer " + adminToken);
+
     expect(res.status).toBe(200);
     expect(res.body.data.id).toBe(assessment1.id);
     expect(res.body.data.title).toBe("Mathematics Midterm");
@@ -130,12 +231,61 @@ describe("Assessments", () => {
 
   it("records learner marks", async () => {
     const res = await request(app)
-      .post("/api/schools/" + school.id + "/assessments/" + assessment1.id + "/results")
+      .post(
+        "/api/schools/" +
+          school.id +
+          "/assessments/" +
+          assessment1.id +
+          "/results",
+      )
       .set("Authorization", "Bearer " + adminToken)
       .send({ learnerId: learner1.id, score: 85 });
+
     expect(res.status).toBe(201);
     expect(res.body.data.score).toBe(85);
     expect(res.body.data.learnerId).toBe(learner1.id);
   });
-});
 
+  it("teacher with zero assigned classes returns empty assessments list", async () => {
+    const res = await request(app)
+      .get("/api/schools/" + school.id + "/assessments")
+      .set("Authorization", "Bearer " + teacherZeroToken);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(0);
+  });
+
+  it("teacher with assigned classes sees only their assessment records", async () => {
+    const res = await request(app)
+      .get("/api/schools/" + school.id + "/assessments")
+      .set("Authorization", "Bearer " + teacherToken);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.length).toBeGreaterThan(0);
+  });
+
+  it("prevents a teacher from moving an assessment into an unassigned class", async () => {
+    const res = await request(app)
+      .patch("/api/schools/" + school.id + "/assessments/" + assessment1.id)
+      .set("Authorization", "Bearer " + teacherToken)
+      .send({ classId: class2.id });
+
+    expect(res.status).toBe(403);
+
+    const unchangedAssessment = await prisma.assessment.findUnique({
+      where: { id: assessment1.id },
+    });
+
+    expect(unchangedAssessment.classId).toBe(class1.id);
+  });
+
+  it("allows a school administrator to move an assessment within their school", async () => {
+    const res = await request(app)
+      .patch("/api/schools/" + school.id + "/assessments/" + assessment1.id)
+      .set("Authorization", "Bearer " + adminToken)
+      .send({ classId: class2.id });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.classId).toBe(class2.id);
+  });
+});
