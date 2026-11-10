@@ -1,3 +1,4 @@
+
 import { Router } from "express";
 
 import { authenticate } from "../middleware/authenticate.js";
@@ -15,7 +16,7 @@ import {
 
 import * as earlyWarningCtrl from "../controllers/earlyWarning.controller.js";
 
-const router = Router();
+const router = Router({ mergeParams: true });
 
 // Alert rule management: school administrators only.
 router.post(

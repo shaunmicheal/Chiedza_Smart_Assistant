@@ -1,8 +1,10 @@
-
 import { Router } from "express";
 
 import { authenticate } from "../middleware/authenticate.js";
-import { requireSchoolMembership, requireRole } from "../middleware/authorize.js";
+import {
+  requireSchoolMembership,
+  requireRole,
+} from "../middleware/authorize.js";
 import { validate } from "../middleware/validate.js";
 
 import {
@@ -18,7 +20,7 @@ import {
   approveDraft,
 } from "../controllers/draft.controller.js";
 
-const router = Router();
+const router = Router({ mergeParams: true });
 
 // List drafts for school admins and teachers.
 // The controller enforces school and assigned-class access.
