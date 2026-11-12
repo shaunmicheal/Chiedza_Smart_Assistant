@@ -1,16 +1,11 @@
 import { AuthContext } from './auth-context'
-import {
-  useCallback,
-  useEffect,
-  useState,
-} from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   apiRequest,
   clearStoredToken,
   getStoredToken,
   setStoredToken,
 } from '../lib/api'
-
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -20,10 +15,8 @@ export function AuthProvider({ children }) {
   const refreshUser = useCallback(async () => {
     const result = await apiRequest('/auth/me')
     const authenticatedUser = result.data
-
     setUser(authenticatedUser)
     setActiveMembership(authenticatedUser.memberships?.[0] ?? null)
-
     return authenticatedUser
   }, [])
 
@@ -91,18 +84,19 @@ export function AuthProvider({ children }) {
     }
   }
 
-  const value = {
-    user,
-    activeMembership,
-    setActiveMembership,
-    loading,
-    login,
-    logout,
-    refreshUser,
-  }
-
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider
+      value={{
+        user,
+        mustChangePassword: Boolean(user?.mustChangePassword),
+        activeMembership,
+        setActiveMembership,
+        loading,
+        login,
+        logout,
+        refreshUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )

@@ -30,6 +30,7 @@ export const authenticate = async (req, res, next) => {
         email: true,
         phone: true,
         isActive: true,
+        mustChangePassword: true,
         memberships: {
           select: { id: true, schoolId: true, role: true, createdAt: true },
         },

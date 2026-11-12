@@ -115,6 +115,7 @@ export const login = async ({ email, password }) => {
       firstName: user.firstName,
       lastName: user.lastName,
       email: user.email,
+      mustChangePassword: user.mustChangePassword,
     },
     memberships: user.memberships,
   };
@@ -130,10 +131,45 @@ export const getMe = async (userId) => {
       email: true,
       phone: true,
       isActive: true,
+      mustChangePassword: true,
       memberships: {
         select: { id: true, schoolId: true, role: true, createdAt: true },
       },
     },
   });
   return user;
+};
+
+
+export const changePassword = async (userId, { currentPassword, newPassword }) => {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, passwordHash: true },
+  });
+
+  if (!user) {
+    const error = new Error("User account not found.");
+    error.status = 404;
+    throw error;
+  }
+
+  const passwordMatches = await verifyPassword(currentPassword, user.passwordHash);
+
+  if (!passwordMatches) {
+    const error = new Error("Your current password is incorrect.");
+    error.status = 401;
+    throw error;
+  }
+
+  const passwordHash = await hashPassword(newPassword);
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      passwordHash,
+      mustChangePassword: false,
+    },
+  });
+
+  return { mustChangePassword: false };
 };

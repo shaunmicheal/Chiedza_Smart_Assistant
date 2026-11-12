@@ -6,6 +6,7 @@ import app from "../server.js";
 const SCHOOL_SLUG = "auth-test-school";
 const ADMIN_EMAIL = "auth-admin@test.chiedza.local";
 const TEACHER_EMAIL = "auth-teacher@test.chiedza.local";
+const TEMP_TEACHER_EMAIL = "auth-temp-teacher@test.chiedza.local";
 const PASSWORD = "password123";
 
 let school;
@@ -22,7 +23,7 @@ const cleanup = async () => {
     await prisma.school.delete({ where: { id: s.id } });
   }
   await prisma.user.deleteMany({
-    where: { email: { in: [ADMIN_EMAIL, TEACHER_EMAIL] } },
+    where: { email: { in: [ADMIN_EMAIL, TEACHER_EMAIL, TEMP_TEACHER_EMAIL] } },
   });
 };
 
@@ -53,6 +54,24 @@ beforeAll(async () => {
   });
   await prisma.schoolMembership.create({
     data: { schoolId: school.id, userId: teacherUser.id, role: "TEACHER" },
+  });
+
+  const temporaryTeacher = await prisma.user.create({
+    data: {
+      firstName: "Temporary",
+      lastName: "Teacher",
+      email: TEMP_TEACHER_EMAIL,
+      passwordHash,
+      mustChangePassword: true,
+    },
+  });
+
+  await prisma.schoolMembership.create({
+    data: {
+      schoolId: school.id,
+      userId: temporaryTeacher.id,
+      role: "TEACHER",
+    },
   });
 });
 
@@ -145,6 +164,58 @@ describe("Auth", () => {
       .get("/api/auth/schools/does-not-exist/context")
       .set("Authorization", `Bearer ${token}`);
     expect(res.status).toBe(403);
+  });
+
+  it("temporary-password teacher must change password before accessing school context", async () => {
+    const loginRes = await request(app).post("/api/auth/login").send({
+      email: TEMP_TEACHER_EMAIL,
+      password: PASSWORD,
+    });
+
+    expect(loginRes.status).toBe(200);
+    expect(loginRes.body.data.user.mustChangePassword).toBe(true);
+
+    const token = loginRes.body.data.token;
+
+    const meBeforeChange = await request(app)
+      .get("/api/auth/me")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(meBeforeChange.status).toBe(200);
+    expect(meBeforeChange.body.data.mustChangePassword).toBe(true);
+
+    const blockedRes = await request(app)
+      .get(`/api/auth/schools/${school.id}/context`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(blockedRes.status).toBe(403);
+    expect(blockedRes.body.code).toBe("PASSWORD_CHANGE_REQUIRED");
+
+    const changeRes = await request(app)
+      .post("/api/auth/password-change")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        currentPassword: PASSWORD,
+        newPassword: "newpassword123",
+        confirmPassword: "newpassword123",
+      });
+
+    expect(changeRes.status).toBe(200);
+    expect(changeRes.body.data.mustChangePassword).toBe(false);
+
+    const meAfterChange = await request(app)
+      .get("/api/auth/me")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(meAfterChange.status).toBe(200);
+    expect(meAfterChange.body.data.mustChangePassword).toBe(false);
+
+    const allowedRes = await request(app)
+      .get(`/api/auth/schools/${school.id}/context`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(allowedRes.status).toBe(200);
+    expect(allowedRes.body.data.role).toBe("TEACHER");
   });
 
   it("logout clears session cookie", async () => {

@@ -24,8 +24,10 @@ function LoginPage() {
 
   useEffect(() => {
     if (user) {
-      const role = user.memberships?.[0]?.role
-      navigate(ROLE_HOME[role] || '/login', { replace: true })
+      const destination = user.mustChangePassword
+        ? '/password-change'
+        : ROLE_HOME[user.memberships?.[0]?.role] || '/login'
+      navigate(destination, { replace: true })
     }
   }, [user, navigate])
 
@@ -37,7 +39,9 @@ function LoginPage() {
     try {
       const authenticatedUser = await login(email.trim(), password)
       const role = authenticatedUser.memberships?.[0]?.role
-      const destination = ROLE_HOME[role]
+      const destination = authenticatedUser.mustChangePassword
+        ? '/password-change'
+        : ROLE_HOME[role]
 
       if (!destination) {
         throw new Error('Your account does not have a supported school role.')
@@ -68,8 +72,10 @@ function LoginPage() {
   }
 
   if (user) {
-    const role = user.memberships?.[0]?.role
-    return <Navigate to={ROLE_HOME[role] || '/login'} replace />
+    const destination = user.mustChangePassword
+      ? '/password-change'
+      : ROLE_HOME[user.memberships?.[0]?.role] || '/login'
+    return <Navigate to={destination} replace />
   }
 
   return (

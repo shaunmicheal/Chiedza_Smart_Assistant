@@ -1,10 +1,9 @@
+
 import { Router } from "express";
 
 import { authenticate } from "../middleware/authenticate.js";
-import {
-  requireSchoolMembership,
-  requireRole,
-} from "../middleware/authorize.js";
+import { requirePasswordChangeComplete } from "../middleware/requirePasswordChangeComplete.js";
+import { requireSchoolMembership, requireRole } from "../middleware/authorize.js";
 import { validate } from "../middleware/validate.js";
 
 import {
@@ -20,13 +19,13 @@ import {
   approveDraft,
 } from "../controllers/draft.controller.js";
 
-const router = Router({ mergeParams: true });
+const router = Router();
+router.use(authenticate, requirePasswordChangeComplete);
 
 // List drafts for school admins and teachers.
 // The controller enforces school and assigned-class access.
 router.get(
   "/",
-  authenticate,
   requireSchoolMembership,
   requireRole("SCHOOL_ADMIN", "TEACHER"),
   listDrafts,
@@ -35,7 +34,6 @@ router.get(
 // Generate a draft from an alert
 router.post(
   "/generate",
-  authenticate,
   requireSchoolMembership,
   validate(generateDraftSchema),
   generateDraft,
@@ -44,7 +42,6 @@ router.post(
 // Edit an existing draft
 router.patch(
   "/:draftId",
-  authenticate,
   requireSchoolMembership,
   validate(editDraftSchema),
   editDraft,
@@ -53,7 +50,6 @@ router.patch(
 // Approve a draft
 router.patch(
   "/:draftId/approve",
-  authenticate,
   requireSchoolMembership,
   validate(approveDraftSchema),
   approveDraft,

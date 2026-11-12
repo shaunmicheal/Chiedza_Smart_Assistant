@@ -15,13 +15,13 @@ let adminToken, teacherToken, teacherZeroToken;
 const cleanup = async () => {
   const s = await prisma.school.findUnique({ where: { slug: SCHOOL_SLUG } });
   if (s) {
+    await prisma.learner.deleteMany({ where: { schoolId: s.id } });
+    await prisma.attendance.deleteMany({ where: { schoolId: s.id } });
+    await prisma.schoolClass.deleteMany({ where: { schoolId: s.id } });
+    await prisma.schoolMembership.deleteMany({ where: { schoolId: s.id } });
     await prisma.classTeacher.deleteMany({ where: { schoolId: s.id } });
     await prisma.assessmentResult.deleteMany({ where: { schoolId: s.id } });
     await prisma.assessment.deleteMany({ where: { schoolId: s.id } });
-    await prisma.attendance.deleteMany({ where: { schoolId: s.id } });
-    await prisma.learner.deleteMany({ where: { schoolId: s.id } });
-    await prisma.schoolClass.deleteMany({ where: { schoolId: s.id } });
-    await prisma.schoolMembership.deleteMany({ where: { schoolId: s.id } });
     await prisma.school.delete({ where: { id: s.id } });
   }
   await prisma.user.deleteMany({

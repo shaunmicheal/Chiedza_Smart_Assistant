@@ -23,3 +23,15 @@ export const schoolContextSchema = z.object({
     schoolId: z.string().min(1),
   }),
 });
+
+
+export const passwordChangeSchema = z.object({
+  body: z.object({
+    currentPassword: z.string().min(1),
+    newPassword: z.string().min(8).max(128),
+    confirmPassword: z.string().min(8).max(128),
+  }).refine((data) => data.newPassword === data.confirmPassword, {
+    message: "New passwords do not match.",
+    path: ["confirmPassword"],
+  }),
+});

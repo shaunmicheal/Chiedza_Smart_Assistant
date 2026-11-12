@@ -1,0 +1,139 @@
+.parent-management {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.parent-management .page-heading {
+  align-items: flex-start;
+}
+
+.parent-management .page-heading > div:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.parent-form-heading h2 {
+  margin: 3px 0 0;
+  color: var(--forest);
+  font-size: 1.1rem;
+}
+
+.parent-form-guidance {
+  margin: 12px 0 18px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.6;
+}
+
+.parent-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 15px;
+}
+
+.parent-form-grid input,
+.parent-form-grid select {
+  width: 100%;
+  min-height: 43px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: white;
+  color: var(--charcoal);
+  font: inherit;
+  font-size: 0.88rem;
+}
+
+.parent-form-grid input:focus,
+.parent-form-grid select:focus {
+  outline: 2px solid rgba(23, 77, 58, 0.2);
+  border-color: var(--forest);
+}
+
+.parent-form-actions,
+.parent-credentials-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 9px;
+  margin-top: 20px;
+}
+
+.parent-form-error {
+  margin: 14px 0 0;
+  color: #a33f32;
+  font-size: 0.84rem;
+}
+
+.parent-credentials {
+  padding: 19px;
+  border: 1px solid rgba(23, 77, 58, 0.2);
+  border-radius: 14px;
+  background: #f3f8f2;
+}
+
+.parent-credentials-heading {
+  display: flex;
+  gap: 12px;
+  color: var(--forest);
+}
+
+.parent-credentials-heading h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.parent-credentials-heading p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 0.83rem;
+  line-height: 1.6;
+}
+
+.parent-credentials-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.parent-credentials-details > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 9px;
+  background: white;
+  overflow-wrap: anywhere;
+}
+
+.parent-credentials-details span {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.parent-credentials-details strong {
+  color: var(--charcoal);
+  font-size: 0.88rem;
+}
+
+.parent-temp-password {
+  font-family: monospace;
+  letter-spacing: 0.02em;
+}
+
+.parent-linked-learners {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 180px;
+}
+
+@media (max-width: 650px) {
+  .parent-form-grid,
+  .parent-credentials-details {
+    grid-template-columns: 1fr;
+  }
+}

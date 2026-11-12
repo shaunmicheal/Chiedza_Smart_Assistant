@@ -31,6 +31,7 @@ export const roleNavigation = {
           { title: 'Teachers', path: '/admin/teachers', icon: GraduationCap },
           { title: 'Classes', path: '/admin/classes', icon: ClipboardList },
           { title: 'Learners', path: '/admin/learners', icon: Users },
+          { title: 'Parents', path: '/admin/parents', icon: Users },
         ],
       },
       {
@@ -109,6 +110,7 @@ export const allRolePages = Object.values(roleNavigation).flatMap((role) =>
 export const pageDescriptions = {
   '/admin/attendance': 'Monitor and review learner attendance.',
   '/admin/assessments': 'Record assessment results and follow progress over time.',
+  '/admin/parents': 'Create parent accounts and manage links between guardians and learners.',
   '/admin/learners': 'Review learner information relevant to attendance and learning progress.',
   '/admin/early-warnings': 'Review patterns of repeated absences and declining marks.',
   '/admin/parent-communication': 'Prepare supportive parent messages in English and Shona.',

@@ -1,7 +1,7 @@
-
 import { Router } from "express";
 
 import { authenticate } from "../middleware/authenticate.js";
+import { requirePasswordChangeComplete } from "../middleware/requirePasswordChangeComplete.js";
 import {
   requireRole,
   requireSchoolMembership,
@@ -16,12 +16,12 @@ import {
 
 import * as earlyWarningCtrl from "../controllers/earlyWarning.controller.js";
 
-const router = Router({ mergeParams: true });
+const router = Router();
+router.use(authenticate, requirePasswordChangeComplete);
 
 // Alert rule management: school administrators only.
 router.post(
   "/rules",
-  authenticate,
   requireSchoolMembership,
   requireRole("SCHOOL_ADMIN"),
   validate(createAlertRuleSchema),
@@ -30,7 +30,6 @@ router.post(
 
 router.get(
   "/rules",
-  authenticate,
   requireSchoolMembership,
   requireRole("SCHOOL_ADMIN"),
   earlyWarningCtrl.listAlertRules,
@@ -38,7 +37,6 @@ router.get(
 
 router.patch(
   "/rules/:ruleId",
-  authenticate,
   requireSchoolMembership,
   requireRole("SCHOOL_ADMIN"),
   validate(updateAlertRuleSchema),
@@ -47,7 +45,6 @@ router.patch(
 
 router.delete(
   "/rules/:ruleId",
-  authenticate,
   requireSchoolMembership,
   requireRole("SCHOOL_ADMIN"),
   earlyWarningCtrl.deleteAlertRule,
@@ -56,7 +53,6 @@ router.delete(
 // Alert viewing: permissions are enforced by the controller.
 router.get(
   "/alerts",
-  authenticate,
   requireSchoolMembership,
   validate(listAlertsQuerySchema),
   earlyWarningCtrl.listAlerts,
@@ -64,7 +60,6 @@ router.get(
 
 router.get(
   "/alerts/:alertId",
-  authenticate,
   requireSchoolMembership,
   earlyWarningCtrl.getAlertDetail,
 );
@@ -72,21 +67,18 @@ router.get(
 // Class access is checked against the actual alert/class records.
 router.get(
   "/class-alerts",
-  authenticate,
   requireSchoolMembership,
   earlyWarningCtrl.listClassAlerts,
 );
 
 router.patch(
   "/alerts/:alertId/acknowledge",
-  authenticate,
   requireSchoolMembership,
   earlyWarningCtrl.acknowledgeAlert,
 );
 
 router.patch(
   "/alerts/:alertId/resolve",
-  authenticate,
   requireSchoolMembership,
   earlyWarningCtrl.resolveAlert,
 );

@@ -33,8 +33,38 @@ export const createTeacherSchema = z.object({
   body: z.object({
     firstName: z.string().min(1).max(60),
     lastName: z.string().min(1).max(60),
-    email: z.string().email(),
-    password: z.string().min(8).max(128),
+    email: z.string().email().max(254),
+  }),
+});
+
+export const assignTeacherToClassSchema = z.object({
+  params: z.object({
+    schoolId: idParam,
+    classId: idParam,
+  }),
+  body: z.object({
+    membershipId: idParam,
+  }),
+});
+
+export const removeTeacherFromClassSchema = z.object({
+  params: z.object({
+    schoolId: idParam,
+    classId: idParam,
+    membershipId: idParam,
+  }),
+});
+
+
+export const createParentSchema = z.object({
+  params: z.object({ schoolId: idParam }),
+  body: z.object({
+    firstName: z.string().min(1).max(60),
+    lastName: z.string().min(1).max(60),
+    email: z.string().email().max(254),
+    phone: z.string().max(30).optional(),
+    learnerId: idParam,
+    relationship: z.string().min(2).max(40),
   }),
 });
 

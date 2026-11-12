@@ -1,0 +1,324 @@
+.teacher-management {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.teacher-notice {
+  padding: 12px 15px;
+  border-radius: 10px;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.teacher-notice.error {
+  color: #963d32;
+  background: #fbefec;
+  border: 1px solid #efd2cc;
+}
+
+.teacher-notice.success {
+  color: #245c43;
+  background: #edf5ef;
+  border: 1px solid #d2e5d6;
+}
+
+.teacher-form-card,
+.teacher-assignment-card,
+.teacher-directory-card,
+.teacher-credentials {
+  padding: 22px;
+  border: 1px solid rgba(23, 77, 58, 0.12);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgba(31, 49, 39, 0.035);
+}
+
+.teacher-section-heading,
+.teacher-directory-heading,
+.teacher-credentials-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.teacher-section-heading h2,
+.teacher-directory-heading h2,
+.teacher-credentials-heading h2 {
+  margin: 3px 0 0;
+  color: var(--charcoal);
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.teacher-guidance,
+.teacher-credentials-heading p {
+  margin: 9px 0 18px;
+  color: var(--muted);
+  font-size: 0.83rem;
+  line-height: 1.55;
+}
+
+.teacher-form-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.teacher-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.teacher-assignment-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.teacher-assignment-form > button {
+  min-height: 42px;
+  white-space: nowrap;
+}
+
+.teacher-inline-note {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.teacher-directory-heading {
+  margin-bottom: 17px;
+}
+
+.teacher-directory-heading p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.teacher-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.teacher-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.85fr);
+  gap: 20px;
+  padding: 17px;
+  border: 1px solid rgba(23, 77, 58, 0.11);
+  border-radius: 13px;
+  background: #fff;
+}
+
+.teacher-card-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+  min-width: 0;
+}
+
+.teacher-avatar {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  place-items: center;
+  border-radius: 12px;
+  color: #174d3a;
+  background: #edf4ee;
+  font-size: 0.85rem;
+  font-weight: 750;
+}
+
+.teacher-card-identity {
+  min-width: 0;
+}
+
+.teacher-card-identity h3 {
+  margin: 1px 0 4px;
+  color: var(--charcoal);
+  font-size: 0.92rem;
+}
+
+.teacher-card-identity p {
+  overflow-wrap: anywhere;
+  margin: 0 0 7px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.teacher-account-status {
+  display: inline-flex;
+  padding: 4px 8px;
+  border-radius: 20px;
+  font-size: 0.69rem;
+  font-weight: 650;
+}
+
+.teacher-account-status.active {
+  color: #276344;
+  background: #edf5ef;
+}
+
+.teacher-account-status.inactive {
+  color: #8a5140;
+  background: #f8efeb;
+}
+
+.teacher-card-assignments h4 {
+  margin: 2px 0 10px;
+  color: var(--charcoal);
+  font-size: 0.78rem;
+}
+
+.teacher-unassigned {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.teacher-assignment-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.teacher-assignment-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 7px 5px 10px;
+  border-radius: 20px;
+  color: #245b43;
+  background: #edf4ee;
+  font-size: 0.73rem;
+  font-weight: 600;
+}
+
+.teacher-assignment-tag button,
+.teacher-icon-button {
+  display: inline-grid;
+  width: 23px;
+  height: 23px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  color: inherit;
+  background: rgba(23, 77, 58, 0.09);
+  cursor: pointer;
+}
+
+.teacher-assignment-tag button:hover,
+.teacher-icon-button:hover {
+  background: rgba(23, 77, 58, 0.17);
+}
+
+.teacher-loading {
+  padding: 24px 10px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+.teacher-credentials {
+  border-color: #d6e7d9;
+  background: #f7faf6;
+}
+
+.teacher-credentials-heading {
+  justify-content: flex-start;
+  align-items: flex-start;
+  color: #245b43;
+}
+
+.teacher-credentials-heading > div {
+  flex: 1;
+}
+
+.teacher-credentials-heading p {
+  margin-bottom: 12px;
+}
+
+.teacher-credentials-details {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin: 15px 0;
+}
+
+.teacher-credentials-details > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.teacher-credentials-details span {
+  color: var(--muted);
+  font-size: 0.73rem;
+}
+
+.teacher-credentials-details strong {
+  overflow-wrap: anywhere;
+  color: var(--charcoal);
+  font-size: 0.85rem;
+}
+
+.teacher-temp-password {
+  font-family: monospace;
+  letter-spacing: 0.02em;
+}
+
+@media (max-width: 850px) {
+  .teacher-form-grid,
+  .teacher-credentials-details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .teacher-assignment-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .teacher-assignment-form > button {
+    grid-column: 1 / -1;
+  }
+
+  .teacher-card {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .teacher-form-card,
+  .teacher-assignment-card,
+  .teacher-directory-card,
+  .teacher-credentials {
+    padding: 16px;
+  }
+
+  .teacher-form-grid,
+  .teacher-credentials-details,
+  .teacher-assignment-form {
+    grid-template-columns: 1fr;
+  }
+
+  .teacher-assignment-form > button {
+    grid-column: auto;
+  }
+
+  .teacher-form-actions {
+    flex-direction: column-reverse;
+  }
+
+  .teacher-form-actions button {
+    width: 100%;
+  }
+}

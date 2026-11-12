@@ -8,23 +8,16 @@ const ROLE_HOME = {
   PARENT: '/parent/overview',
 }
 
-function ProtectedRoute({ role, children }) {
-  const {
-    user,
-    loading,
-    setActiveMembership,
-  } = useAuth()
-
+function ProtectedRoute({ role, allowPasswordChange = false, children }) {
+  const { user, loading, setActiveMembership } = useAuth()
   const location = useLocation()
 
-  const membership = user?.memberships?.find(
-    (item) => item.role === role
-  )
+  const membership = role
+    ? user?.memberships?.find((item) => item.role === role)
+    : null
 
   useEffect(() => {
-    if (membership) {
-      setActiveMembership(membership)
-    }
+    if (membership) setActiveMembership(membership)
   }, [membership, setActiveMembership])
 
   if (loading) {
@@ -44,6 +37,18 @@ function ProtectedRoute({ role, children }) {
         state={{ from: location.pathname }}
       />
     )
+  }
+
+  if (allowPasswordChange) {
+    if (!user.mustChangePassword) {
+      const fallback = user.memberships?.[0]
+      return <Navigate to={ROLE_HOME[fallback?.role] || '/login'} replace />
+    }
+    return children
+  }
+
+  if (user.mustChangePassword) {
+    return <Navigate to="/password-change" replace />
   }
 
   if (!membership) {

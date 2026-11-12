@@ -34,3 +34,29 @@ export const removeTeacher = async (req, res, next) => {
     res.status(204).send();
   } catch (error) { next(error); }
 };
+
+export const assignTeacherToClass = async (req, res, next) => {
+  try {
+    const data = await teacherService.assignTeacherToClass(
+      req.params.schoolId,
+      req.params.classId,
+      req.body.membershipId
+    );
+    res.status(201).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const removeTeacherFromClass = async (req, res, next) => {
+  try {
+    await teacherService.removeTeacherFromClass(
+      req.params.schoolId,
+      req.params.classId,
+      req.params.membershipId
+    );
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+};

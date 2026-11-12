@@ -1,4 +1,4 @@
-import { login, getMe } from "../services/auth.service.js";
+import { login, getMe, changePassword } from "../services/auth.service.js";
 
 export const loginController = async (req, res, next) => {
   try {
@@ -40,3 +40,17 @@ const setTokenCookie = (res, token) => {
 
 // re-export for routes
 export { cookieOptions };
+
+
+export const passwordChangeController = async (req, res, next) => {
+  try {
+    const result = await changePassword(req.user.id, req.body);
+    res.status(200).json({
+      success: true,
+      message: "Password changed successfully.",
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};

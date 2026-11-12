@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment files and secrets
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Build output and caches
+dist/
+dist-ssr/
+coverage/
+.vite/
+.vitest-cache/
+.cache/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Temporary diagnostics and backups
+/backend/probeDbTmp.cjs
+/frontend/src/data/navigation.js.bak
+
+# Root-level empty lockfile (this repository has no root package.json)
+/package-lock.json
+
+# Operating system files
+.DS_Store
+Thumbs.db

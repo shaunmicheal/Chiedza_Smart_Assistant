@@ -14,6 +14,7 @@ const NEW_TEACHER = "newteacher@test.chiedza.local";
 
 let school1, school2, admin1, admin2, teacher1;
 let teacherMembership, class1, class2, learner1;
+let newTeacherTempPassword, newTeacherMembershipId;
 
 const cleanup = async () => {
   for (const slug of [S1, S2]) {
@@ -159,10 +160,10 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-const login = async (email) => {
+const login = async (email, password = PASSWORD) => {
   const res = await request(app)
     .post("/api/auth/login")
-    .send({ email, password: PASSWORD });
+    .send({ email, password });
 
   return res.body.data.token;
 };
@@ -220,7 +221,6 @@ describe("Teachers", () => {
         firstName: "New",
         lastName: "Teacher",
         email: NEW_TEACHER,
-        password: PASSWORD,
       });
 
     expect(res.status).toBe(403);
@@ -236,14 +236,20 @@ describe("Teachers", () => {
         firstName: "New",
         lastName: "Teacher",
         email: NEW_TEACHER,
-        password: PASSWORD,
       });
 
     expect(res.status).toBe(201);
     expect(res.body.data.membership.role).toBe("TEACHER");
+    expect(res.body.data.user.mustChangePassword).toBe(true);
+    expect(res.body.data.tempPassword).toBeTruthy();
+    expect(res.body.data.membership.user.passwordHash).toBeUndefined();
+    expect(res.body.data.user.passwordHash).toBeUndefined();
+
+    newTeacherTempPassword = res.body.data.tempPassword;
+    newTeacherMembershipId = res.body.data.membership.id;
   });
 
-  it("admin lists teachers", async () => {
+  it("admin lists teachers without exposing password hashes", async () => {
     const token = await login(ADMIN1);
 
     const res = await request(app)
@@ -252,6 +258,45 @@ describe("Teachers", () => {
 
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.data)).toBe(true);
+    expect(
+      res.body.data.every((teacher) => !("passwordHash" in teacher.user))
+    ).toBe(true);
+  });
+
+  it("admin assigns a teacher to a class", async () => {
+    const token = await login(ADMIN1);
+
+    const res = await request(app)
+      .post(`/api/schools/${school1.id}/classes/${class1.id}/teachers`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ membershipId: newTeacherMembershipId });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.membershipId).toBe(newTeacherMembershipId);
+    expect(res.body.data.classId).toBe(class1.id);
+  });
+
+  it("admin removes a teacher from a class", async () => {
+    const token = await login(ADMIN1);
+
+    const res = await request(app)
+      .delete(
+        `/api/schools/${school1.id}/classes/${class1.id}/teachers/${newTeacherMembershipId}`
+      )
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(204);
+  });
+
+  it("teacher cannot assign another teacher to a class", async () => {
+    const token = await login(TEACHER1);
+
+    const res = await request(app)
+      .post(`/api/schools/${school1.id}/classes/${class1.id}/teachers`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ membershipId: newTeacherMembershipId });
+
+    expect(res.status).toBe(403);
   });
 });
 
@@ -309,8 +354,20 @@ describe("Classes", () => {
     expect(res.body.data[0].id).toBe(class1.id);
   });
 
-  it("unassigned teacher receives an empty class list", async () => {
-    const token = await login(NEW_TEACHER);
+  it("unassigned teacher receives an empty class list after changing temporary password", async () => {
+    const token = await login(NEW_TEACHER, newTeacherTempPassword);
+
+    const passwordChange = await request(app)
+      .post("/api/auth/password-change")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        currentPassword: newTeacherTempPassword,
+        newPassword: "newpassword123",
+        confirmPassword: "newpassword123",
+      });
+
+    expect(passwordChange.status).toBe(200);
+    expect(passwordChange.body.data.mustChangePassword).toBe(false);
 
     const res = await request(app)
       .get(`/api/schools/${school1.id}/classes`)

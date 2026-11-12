@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { authenticate } from "../middleware/authenticate.js";
+import { requirePasswordChangeComplete } from "../middleware/requirePasswordChangeComplete.js";
 import {
   requireRole,
   requireSchoolMembership,
@@ -11,7 +12,7 @@ import * as attendanceCtrl from "../controllers/attendance.controller.js";
 
 // Create Express router
 const router = Router({ mergeParams: true });
-router.use(authenticate);
+router.use(authenticate, requirePasswordChangeComplete);
 
 // Inline schema definitions (matching those in attendance.validators.js)
 const idParam = z.string().min(1);

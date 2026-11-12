@@ -20,6 +20,8 @@ const DirectoryPage = lazy(() => import('../pages/shared/DirectoryPage'))
 const ProfilePage = lazy(() => import('../pages/shared/ProfilePage'))
 const AlertRulesPage = lazy(() => import('../pages/admin/AlertRulesPage'))
 const SettingsPage = lazy(() => import('../pages/admin/SettingsPage'))
+const ParentManagementPage = lazy(() => import('../pages/admin/ParentManagementPage'))
+const TeacherManagementPage = lazy(() => import('../pages/admin/TeacherManagementPage'))
 const ChildrenPage = lazy(() => import('../pages/parent/ChildrenPage'))
 const ParentAttendancePage = lazy(() => import('../pages/parent/AttendancePage'))
 const ProgressPage = lazy(() => import('../pages/parent/ProgressPage'))
@@ -27,6 +29,7 @@ const MessagesPage = lazy(() => import('../pages/parent/MessagesPage'))
 const NotificationsPage = lazy(() => import('../pages/parent/NotificationsPage'))
 const LoginPage = lazy(() => import('../pages/auth/LoginPage'))
 const ActivationPage = lazy(() => import('../pages/auth/ActivationPage'))
+const PasswordChangePage = lazy(() => import('../pages/auth/PasswordChangePage'))
 
 const overviewPages = {
   admin: DashboardPage,
@@ -47,9 +50,10 @@ const roleHome = {
 }
 
 const routePages = {
-  '/admin/teachers': [DirectoryPage, { kind: 'teachers' }],
+  '/admin/teachers': [TeacherManagementPage],
   '/admin/classes': [DirectoryPage, { kind: 'classes' }],
   '/admin/learners': [DirectoryPage, { kind: 'learners' }],
+  '/admin/parents': [ParentManagementPage],
   '/teacher/classes': [DirectoryPage, { kind: 'classes' }],
   '/teacher/learners': [DirectoryPage, { kind: 'learners' }],
   '/admin/early-warnings': [EarlyWarningsPage],
@@ -123,6 +127,7 @@ function HomeRedirect() {
 
   if (loading) return <LoadingPage />
   if (!user) return <Navigate to="/login" replace />
+  if (user.mustChangePassword) return <Navigate to="/password-change" replace />
 
   const role = user.memberships?.[0]?.role
   return <Navigate to={roleHome[role] || '/login'} replace />
@@ -135,6 +140,14 @@ function AppRoutes() {
         <Route path="/" element={<HomeRedirect />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/activate" element={<ActivationPage />} />
+        <Route
+          path="/password-change"
+          element={
+            <ProtectedRoute allowPasswordChange>
+              <PasswordChangePage />
+            </ProtectedRoute>
+          }
+        />
 
         {roleRoutes('admin', AdminLayout)}
         {roleRoutes('teacher', TeacherLayout)}
