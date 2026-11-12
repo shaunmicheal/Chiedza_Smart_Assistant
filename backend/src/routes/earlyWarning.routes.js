@@ -16,7 +16,7 @@ import {
 
 import * as earlyWarningCtrl from "../controllers/earlyWarning.controller.js";
 
-const router = Router();
+const router = Router({ mergeParams: true });
 router.use(authenticate, requirePasswordChangeComplete);
 
 // Alert rule management: school administrators only.

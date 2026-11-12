@@ -19,7 +19,7 @@ import {
   approveDraft,
 } from "../controllers/draft.controller.js";
 
-const router = Router();
+const router = Router({ mergeParams: true });
 router.use(authenticate, requirePasswordChangeComplete);
 
 // List drafts for school admins and teachers.
