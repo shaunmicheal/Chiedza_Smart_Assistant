@@ -1,248 +1,952 @@
-import { useMemo, useState } from 'react'
-import { Plus, Save } from 'lucide-react'
-import {
-  demoClasses,
-  demoLearners,
-  demoNotice,
-  initialAssessments,
-} from '../../data/mock/operations'
-import DemoNotice from '../../components/common/DemoNotice'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Plus, Save, RefreshCw } from 'lucide-react'
+
+import { useAuth } from '../../context/useAuth'
+import { apiRequest } from '../../lib/api'
+
 import EmptyState from '../../components/common/EmptyState'
 import FormField from '../../components/common/FormField'
 import PageHeading from '../../components/common/PageHeading'
 import Panel from '../../components/common/Panel'
-import { AssessmentChart, PerformanceTrendChart } from '../../components/dashboard/DashboardCharts'
+import {
+  AssessmentChart,
+  PerformanceTrendChart,
+} from '../../components/dashboard/DashboardCharts'
 
-const formatDate = (date) => new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(`${date}T00:00:00`))
+const getList = (response, label) => {
+  if (!response?.success || !Array.isArray(response.data)) {
+    throw new Error(`The server returned an invalid ${label} response.`)
+  }
 
-function averageScore(assessment) {
-  const completed = assessment.results.filter((result) => result.score !== '' && result.score !== null && Number.isFinite(Number(result.score)))
-  if (!completed.length) return 0
-  return Math.round(completed.reduce((sum, result) => sum + (Number(result.score) / assessment.maximum) * 100, 0) / completed.length)
+  return response.data
 }
 
+const getRecord = (response, label) => {
+  if (!response?.success || !response.data) {
+    throw new Error(`The server returned an invalid ${label} response.`)
+  }
+
+  return response.data
+}
+
+const getLocalDate = () => {
+  const date = new Date()
+  const offset = date.getTimezoneOffset()
+  return new Date(date.getTime() - offset * 60000)
+    .toISOString()
+    .slice(0, 10)
+}
+
+const formatDate = (value) => {
+  if (!value) return 'Date unavailable'
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) return 'Date unavailable'
+
+  return new Intl.DateTimeFormat('en', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(date)
+}
+
+const learnerName = (learner) =>
+  `${learner?.firstName ?? ''} ${learner?.lastName ?? ''}`.trim() ||
+  'Learner record unavailable'
+
 function AssessmentsPage({ role }) {
+  const { activeMembership } = useAuth()
+  const schoolId = activeMembership?.schoolId
   const isTeacher = role === 'teacher'
-  const classes = demoClasses.filter((classroom) => !isTeacher || ['Grade 4A', 'Grade 5B'].includes(classroom.name))
-  const [assessments, setAssessments] = useState(initialAssessments)
-  const [selectedId, setSelectedId] = useState(initialAssessments[0].id)
-  const [showCreateForm, setShowCreateForm] = useState(false)
-  const [search, setSearch] = useState('')
-  const [scoreErrors, setScoreErrors] = useState({})
+
+  const [classes, setClasses] = useState([])
+  const [assessments, setAssessments] = useState([])
+  const [learners, setLearners] = useState([])
+  const [selectedId, setSelectedId] = useState('')
+
+  const [selectedDetail, setSelectedDetail] = useState(null)
+  const [scores, setScores] = useState({})
+  const [savedScores, setSavedScores] = useState({})
+
+  const [loading, setLoading] = useState(true)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [creating, setCreating] = useState(false)
+
+  const [error, setError] = useState('')
   const [feedback, setFeedback] = useState('')
+  const [search, setSearch] = useState('')
+  const [showCreateForm, setShowCreateForm] = useState(false)
+
   const [newAssessment, setNewAssessment] = useState({
     title: '',
-    subject: '',
-    className: classes[0]?.name ?? '',
-    date: '2026-11-05',
-    maximum: '100',
+    description: '',
+    classId: '',
+    date: getLocalDate(),
+    maxScore: '100',
   })
 
-  const scopedAssessments = useMemo(() => assessments.filter((assessment) =>
-    !isTeacher || ['Grade 4A', 'Grade 5B'].includes(assessment.className)),
-  [assessments, isTeacher])
-  const selectedAssessment = scopedAssessments.find((assessment) => assessment.id === selectedId)
-    ?? scopedAssessments[0]
-  const filteredAssessments = scopedAssessments.filter((assessment) =>
-    `${assessment.title} ${assessment.subject} ${assessment.className}`.toLowerCase().includes(search.trim().toLowerCase()))
-  const performanceByClass = classes.map((classroom) => {
-    const classAssessments = scopedAssessments.filter((assessment) => assessment.className === classroom.name)
-    const results = classAssessments.flatMap((assessment) => assessment.results)
-      .filter((result) => result.score !== '' && result.score !== null)
-    const score = results.length
-      ? Math.round(results.reduce((sum, result) => sum + (Number(result.score) / classAssessments.find((assessment) => assessment.results.includes(result)).maximum) * 100, 0) / results.length)
+  const selectedAssessment = assessments.find(
+    (assessment) => assessment.id === selectedId
+  )
+
+  const resultByLearner = useMemo(() => {
+    const resultMap = {}
+
+    for (const result of selectedDetail?.results ?? []) {
+      resultMap[result.learnerId] = result
+    }
+
+    return resultMap
+  }, [selectedDetail])
+
+  const filteredAssessments = useMemo(() => {
+    const term = search.trim().toLowerCase()
+
+    if (!term) return assessments
+
+    return assessments.filter((assessment) => {
+      const className = assessment.schoolClass?.name ?? ''
+
+      return `${assessment.title} ${assessment.description ?? ''} ${className}`
+        .toLowerCase()
+        .includes(term)
+    })
+  }, [assessments, search])
+
+  const completedScores = learners
+    .map((learner) => {
+      const raw = scores[learner.id]
+
+      if (raw === undefined || raw === '') return null
+
+      const value = Number(raw)
+
+      return Number.isFinite(value) ? value : null
+    })
+    .filter((value) => value !== null)
+
+  const assessedCount = completedScores.length
+
+  const currentAverage =
+    assessedCount && selectedAssessment?.maxScore
+      ? Math.round(
+          completedScores.reduce((total, score) => total + score, 0) /
+            assessedCount /
+            selectedAssessment.maxScore *
+            100
+        )
       : 0
-    return { group: classroom.name, score }
-  }).filter((item) => item.score > 0)
-  const trend = scopedAssessments
-    .filter((assessment) => assessment.results.some((result) => result.score !== '' && result.score !== null))
-    .slice()
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .map((assessment) => ({
-      dateLabel: new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' }).format(new Date(`${assessment.date}T00:00:00`)),
-      average: averageScore(assessment),
-      title: assessment.title,
+
+  const performanceByClass =
+    assessedCount && selectedAssessment
+      ? [
+          {
+            group: selectedAssessment.schoolClass?.name ?? 'Selected class',
+            score: currentAverage,
+          },
+        ]
+      : []
+
+  const trend =
+    assessedCount && selectedAssessment
+      ? [
+          {
+            dateLabel: new Intl.DateTimeFormat('en', {
+              month: 'short',
+              day: 'numeric',
+            }).format(new Date(`${String(selectedAssessment.date).slice(0, 10)}T00:00:00`)),
+            average: currentAverage,
+            title: selectedAssessment.title,
+          },
+        ]
+      : []
+
+  const loadRegister = useCallback(async () => {
+    if (!schoolId) {
+      throw new Error(
+        'No active school membership was found. Please sign in again.'
+      )
+    }
+
+    const [classesResponse, assessmentsResponse] = await Promise.all([
+      apiRequest(`/schools/${schoolId}/classes`),
+      apiRequest(`/schools/${schoolId}/assessments`),
+    ])
+
+    const classRecords = getList(classesResponse, 'classes')
+    const assessmentRecords = getList(
+      assessmentsResponse,
+      'assessments'
+    )
+
+    setClasses(classRecords)
+    setAssessments(assessmentRecords)
+
+    setNewAssessment((current) => ({
+      ...current,
+      classId:
+        current.classId && classRecords.some((item) => item.id === current.classId)
+          ? current.classId
+          : classRecords[0]?.id ?? '',
     }))
 
-  function createAssessment(event) {
+    setSelectedId((current) => {
+      if (current && assessmentRecords.some((item) => item.id === current)) {
+        return current
+      }
+
+      return assessmentRecords[0]?.id ?? ''
+    })
+  }, [schoolId])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const load = async () => {
+      setLoading(true)
+      setError('')
+
+      try {
+        if (!schoolId) {
+          throw new Error(
+            'No active school membership was found. Please sign in again.'
+          )
+        }
+
+        const [classesResponse, assessmentsResponse] = await Promise.all([
+          apiRequest(`/schools/${schoolId}/classes`),
+          apiRequest(`/schools/${schoolId}/assessments`),
+        ])
+
+        const classRecords = getList(classesResponse, 'classes')
+        const assessmentRecords = getList(
+          assessmentsResponse,
+          'assessments'
+        )
+
+        if (cancelled) return
+
+        setClasses(classRecords)
+        setAssessments(assessmentRecords)
+
+        setNewAssessment((current) => ({
+          ...current,
+          classId:
+            current.classId &&
+            classRecords.some((item) => item.id === current.classId)
+              ? current.classId
+              : classRecords[0]?.id ?? '',
+        }))
+
+        setSelectedId((current) => {
+          if (current && assessmentRecords.some((item) => item.id === current)) {
+            return current
+          }
+
+          return assessmentRecords[0]?.id ?? ''
+        })
+      } catch (requestError) {
+        if (!cancelled) {
+          setError(
+            requestError.message ||
+              'Unable to load assessments. Please try again.'
+          )
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    load()
+
+    return () => {
+      cancelled = true
+    }
+  }, [schoolId])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadSelectedAssessment = async () => {
+      if (!schoolId || !selectedId) {
+        setSelectedDetail(null)
+        setLearners([])
+        setScores({})
+        setSavedScores({})
+        return
+      }
+
+      setDetailLoading(true)
+      setFeedback('')
+
+      try {
+        const detailResponse = await apiRequest(
+          `/schools/${schoolId}/assessments/${selectedId}`
+        )
+
+        const detail = getRecord(detailResponse, 'assessment')
+
+        const learnersResponse = await apiRequest(
+          `/schools/${schoolId}/learners?classId=${encodeURIComponent(detail.classId)}`
+        )
+
+        const learnerRecords = getList(learnersResponse, 'learners')
+
+        if (cancelled) return
+
+        const initialScores = {}
+
+        for (const result of detail.results ?? []) {
+          initialScores[result.learnerId] = String(result.score)
+        }
+
+        setSelectedDetail(detail)
+        setLearners(learnerRecords)
+        setScores(initialScores)
+        setSavedScores(initialScores)
+      } catch (requestError) {
+        if (!cancelled) {
+          setSelectedDetail(null)
+          setLearners([])
+          setScores({})
+          setSavedScores({})
+          setError(
+            requestError.message ||
+              'Unable to load this assessment and its learners.'
+          )
+        }
+      } finally {
+        if (!cancelled) setDetailLoading(false)
+      }
+    }
+
+    loadSelectedAssessment()
+
+    return () => {
+      cancelled = true
+    }
+  }, [schoolId, selectedId])
+
+  function handleScoreChange(learnerId, value) {
+    setScores((current) => ({
+      ...current,
+      [learnerId]: value,
+    }))
+    setFeedback('')
+  }
+
+  async function createAssessment(event) {
     event.preventDefault()
-    const maximum = Number(newAssessment.maximum)
-    if (!newAssessment.title.trim() || !newAssessment.subject.trim() || !newAssessment.date || !Number.isFinite(maximum) || maximum <= 0) {
-      setFeedback('Enter an assessment title, subject, date, and a maximum score greater than zero.')
+    setError('')
+    setFeedback('')
+
+    if (!newAssessment.classId) {
+      setError('Select a class before creating an assessment.')
       return
     }
 
-    const assessment = {
-      id: `as-local-${Date.now()}`,
-      title: newAssessment.title.trim(),
-      subject: newAssessment.subject.trim(),
-      className: newAssessment.className,
-      date: newAssessment.date,
-      maximum,
-      results: demoLearners
-        .filter((learner) => learner.className === newAssessment.className)
-        .map((learner) => ({ learnerId: learner.id, score: '' })),
+    const maxScore = Number(newAssessment.maxScore)
+
+    if (
+      !newAssessment.title.trim() ||
+      !newAssessment.date ||
+      !Number.isInteger(maxScore) ||
+      maxScore < 1 ||
+      maxScore > 1000
+    ) {
+      setError(
+        'Enter an assessment title, date, and a whole-number maximum score between 1 and 1000.'
+      )
+      return
     }
-    setAssessments((current) => [assessment, ...current])
-    setSelectedId(assessment.id)
-    setShowCreateForm(false)
-    setNewAssessment((current) => ({ ...current, title: '', subject: '', maximum: '100' }))
-    setFeedback('Assessment added in this page only. It has not been saved to a school system.')
+
+    setCreating(true)
+
+    try {
+      const response = await apiRequest(
+        `/schools/${schoolId}/assessments`,
+        {
+          method: 'POST',
+          body: {
+            classId: newAssessment.classId,
+            title: newAssessment.title.trim(),
+            description: newAssessment.description.trim() || null,
+            date: newAssessment.date,
+            maxScore,
+          },
+        }
+      )
+
+      const created = getRecord(response, 'new assessment')
+
+      setAssessments((current) => [
+        created,
+        ...current.filter((item) => item.id !== created.id),
+      ])
+
+      setSelectedId(created.id)
+      setShowCreateForm(false)
+
+      setNewAssessment((current) => ({
+        ...current,
+        title: '',
+        description: '',
+        date: getLocalDate(),
+        maxScore: '100',
+      }))
+
+      setFeedback('Assessment created and saved successfully.')
+    } catch (requestError) {
+      setError(
+        requestError.message || 'Unable to create the assessment.'
+      )
+    } finally {
+      setCreating(false)
+    }
   }
 
-  function updateScore(learnerId, rawValue) {
-    const raw = rawValue.trim()
-    const numeric = raw === '' ? '' : Number(raw)
-    const error = raw !== '' && (!Number.isFinite(numeric) || numeric < 0 || numeric > selectedAssessment.maximum)
-      ? `Enter a score from 0 to ${selectedAssessment.maximum}.`
-      : ''
-    setScoreErrors((current) => ({ ...current, [learnerId]: error }))
+  async function saveResults() {
+    if (!selectedAssessment || !selectedDetail) return
+
+    setError('')
     setFeedback('')
-    if (error) return
-    setAssessments((current) => current.map((assessment) => assessment.id !== selectedAssessment.id
-      ? assessment
-      : {
-          ...assessment,
-          results: assessment.results.map((result) => result.learnerId === learnerId
-            ? { ...result, score: numeric }
-            : result),
-        }))
+
+    const pendingChanges = []
+
+    for (const learner of learners) {
+      const rawValue = scores[learner.id] ?? ''
+      const existingResult = resultByLearner[learner.id]
+      const savedValue = savedScores[learner.id]
+
+      if (rawValue === '') {
+        if (existingResult) {
+          setError(
+            `The saved score for ${learnerName(learner)} cannot be cleared. Enter a replacement score instead.`
+          )
+          return
+        }
+
+        continue
+      }
+
+      const score = Number(rawValue)
+
+      if (
+        !Number.isInteger(score) ||
+        score < 0 ||
+        score > selectedAssessment.maxScore
+      ) {
+        setError(
+          `Enter a whole-number score from 0 to ${selectedAssessment.maxScore} for ${learnerName(learner)}.`
+        )
+        return
+      }
+
+      if (savedValue !== undefined && Number(savedValue) === score) {
+        continue
+      }
+
+      pendingChanges.push({
+        learnerId: learner.id,
+        resultId: existingResult?.id,
+        score,
+      })
+    }
+
+    if (!pendingChanges.length) {
+      setFeedback('There are no new score changes to save.')
+      return
+    }
+
+    setSaving(true)
+
+    let savedCount = 0
+
+    try {
+      for (const change of pendingChanges) {
+        if (change.resultId) {
+          await apiRequest(
+            `/schools/${schoolId}/assessments/${selectedId}/results/${change.resultId}`,
+            {
+              method: 'PATCH',
+              body: { score: change.score },
+            }
+          )
+        } else {
+          await apiRequest(
+            `/schools/${schoolId}/assessments/${selectedId}/results`,
+            {
+              method: 'POST',
+              body: {
+                learnerId: change.learnerId,
+                score: change.score,
+              },
+            }
+          )
+        }
+
+        savedCount += 1
+      }
+
+      const refreshedResponse = await apiRequest(
+        `/schools/${schoolId}/assessments/${selectedId}`
+      )
+
+      const refreshedDetail = getRecord(
+        refreshedResponse,
+        'updated assessment'
+      )
+
+      const refreshedScores = {}
+
+      for (const result of refreshedDetail.results ?? []) {
+        refreshedScores[result.learnerId] = String(result.score)
+      }
+
+      setSelectedDetail(refreshedDetail)
+      setScores(refreshedScores)
+      setSavedScores(refreshedScores)
+
+      setFeedback(
+        `${savedCount} learner score${savedCount === 1 ? '' : 's'} saved successfully.`
+      )
+
+      await loadRegister()
+    } catch (requestError) {
+      setError(
+        savedCount > 0
+          ? `${savedCount} score(s) were saved before an error occurred: ${requestError.message}. Refresh the assessment to check the saved records.`
+          : requestError.message || 'Unable to save assessment results.'
+      )
+    } finally {
+      setSaving(false)
+    }
   }
 
-  function saveResults() {
-    if (Object.values(scoreErrors).some(Boolean)) return
-    setFeedback('Assessment results updated in this page only. They have not been saved to a school system.')
-  }
+  async function refreshPage() {
+    setError('')
+    setFeedback('')
 
-  const selectedLearners = selectedAssessment
-    ? demoLearners.filter((learner) => learner.className === selectedAssessment.className)
-    : []
-  const assessedCount = selectedAssessment?.results.filter((result) => result.score !== '' && result.score !== null).length ?? 0
-  const currentAverage = selectedAssessment ? averageScore(selectedAssessment) : 0
+    try {
+      await loadRegister()
+    } catch (requestError) {
+      setError(requestError.message || 'Unable to refresh assessments.')
+    }
+  }
 
   return (
     <main className="content">
       <PageHeading
         eyebrow={isTeacher ? 'Assigned classes' : 'School operations'}
         title="Assessments"
-        description="Create assessments, enter learner scores, and review class performance."
+        description="Create assessments, record learner scores, and review actual class performance."
       >
-        <button type="button" className="primary-button" onClick={() => setShowCreateForm((show) => !show)}>
-          <Plus size={16} aria-hidden="true" /> {showCreateForm ? 'Close form' : 'New assessment'}
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={refreshPage}
+          disabled={loading || saving}
+        >
+          <RefreshCw size={16} aria-hidden="true" />
+          Refresh
+        </button>
+
+        <button
+          type="button"
+          className="primary-button"
+          onClick={() => setShowCreateForm((current) => !current)}
+          disabled={loading || classes.length === 0}
+        >
+          <Plus size={16} aria-hidden="true" />
+          {showCreateForm ? 'Close form' : 'New assessment'}
         </button>
       </PageHeading>
-      <DemoNotice>{demoNotice} Assessment records and score edits are local demonstration state only.</DemoNotice>
-      {feedback && <p className="form-feedback" role="status">{feedback}</p>}
+
+      {error && (
+        <div className="dashboard-error" role="alert">
+          <strong>Something went wrong</strong>
+          <p>{error}</p>
+        </div>
+      )}
+
+      {feedback && (
+        <p className="form-feedback" role="status">
+          {feedback}
+        </p>
+      )}
 
       {showCreateForm && (
-        <Panel eyebrow="Local demonstration form" title="Create assessment">
-          <form className="form-grid assessment-create-form" onSubmit={createAssessment}>
-            <FormField id="assessment-title" label="Assessment title">
-              <input id="assessment-title" value={newAssessment.title} onChange={(event) => setNewAssessment({ ...newAssessment, title: event.target.value })} required maxLength={100} />
-            </FormField>
-            <FormField id="assessment-subject" label="Subject">
-              <input id="assessment-subject" value={newAssessment.subject} onChange={(event) => setNewAssessment({ ...newAssessment, subject: event.target.value })} required maxLength={60} />
-            </FormField>
-            <FormField id="assessment-class" label="Class">
-              <select id="assessment-class" value={newAssessment.className} onChange={(event) => setNewAssessment({ ...newAssessment, className: event.target.value })}>
-                {classes.map((classroom) => <option key={classroom.id} value={classroom.name}>{classroom.name}</option>)}
-              </select>
-            </FormField>
-            <FormField id="assessment-date" label="Assessment date">
-              <input id="assessment-date" type="date" value={newAssessment.date} onChange={(event) => setNewAssessment({ ...newAssessment, date: event.target.value })} required />
-            </FormField>
-            <FormField id="assessment-maximum" label="Maximum score" hint="Must be a number greater than zero.">
-              <input id="assessment-maximum" type="number" min="1" step="1" value={newAssessment.maximum} onChange={(event) => setNewAssessment({ ...newAssessment, maximum: event.target.value })} required />
-            </FormField>
-            <div className="form-actions">
-              <button type="submit" className="primary-button">Create demonstration assessment</button>
-            </div>
-          </form>
+        <Panel eyebrow="School records" title="Create assessment">
+          {classes.length === 0 ? (
+            <EmptyState
+              title="No classes available"
+              description="Create a school class before adding an assessment."
+            />
+          ) : (
+            <form
+              className="form-grid assessment-create-form"
+              onSubmit={createAssessment}
+            >
+              <FormField id="assessment-title" label="Assessment title">
+                <input
+                  id="assessment-title"
+                  value={newAssessment.title}
+                  onChange={(event) =>
+                    setNewAssessment((current) => ({
+                      ...current,
+                      title: event.target.value,
+                    }))
+                  }
+                  required
+                  maxLength={120}
+                  placeholder="e.g. Mathematics Term 3 Test"
+                />
+              </FormField>
+
+              <FormField
+                id="assessment-description"
+                label="Description"
+                hint="Optional. Add details about the assessment."
+              >
+                <textarea
+                  id="assessment-description"
+                  value={newAssessment.description}
+                  onChange={(event) =>
+                    setNewAssessment((current) => ({
+                      ...current,
+                      description: event.target.value,
+                    }))
+                  }
+                  maxLength={500}
+                  rows={3}
+                />
+              </FormField>
+
+              <FormField id="assessment-class" label="Class">
+                <select
+                  id="assessment-class"
+                  value={newAssessment.classId}
+                  onChange={(event) =>
+                    setNewAssessment((current) => ({
+                      ...current,
+                      classId: event.target.value,
+                    }))
+                  }
+                  required
+                >
+                  {classes.map((classroom) => (
+                    <option key={classroom.id} value={classroom.id}>
+                      {classroom.name} · {classroom.academicYear}
+                    </option>
+                  ))}
+                </select>
+              </FormField>
+
+              <FormField id="assessment-date" label="Assessment date">
+                <input
+                  id="assessment-date"
+                  type="date"
+                  value={newAssessment.date}
+                  onChange={(event) =>
+                    setNewAssessment((current) => ({
+                      ...current,
+                      date: event.target.value,
+                    }))
+                  }
+                  required
+                />
+              </FormField>
+
+              <FormField
+                id="assessment-maximum"
+                label="Maximum score"
+                hint="Use a whole number between 1 and 1000."
+              >
+                <input
+                  id="assessment-maximum"
+                  type="number"
+                  min="1"
+                  max="1000"
+                  step="1"
+                  value={newAssessment.maxScore}
+                  onChange={(event) =>
+                    setNewAssessment((current) => ({
+                      ...current,
+                      maxScore: event.target.value,
+                    }))
+                  }
+                  required
+                />
+              </FormField>
+
+              <div className="form-actions">
+                <button
+                  type="submit"
+                  className="primary-button"
+                  disabled={creating}
+                >
+                  {creating ? 'Creating...' : 'Create assessment'}
+                </button>
+              </div>
+            </form>
+          )}
         </Panel>
       )}
 
-      <section className="assessment-overview-grid">
-        <Panel eyebrow="Assessment register" title="Assessments">
-          <FormField id="assessment-search" label="Search assessments">
-            <input id="assessment-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Title, subject, or class" />
-          </FormField>
-          {filteredAssessments.length === 0 ? (
-            <EmptyState title="No assessments found" description="Try another search or create a new demonstration assessment." />
-          ) : (
-            <ul className="assessment-list">
-              {filteredAssessments.map((assessment) => (
-                <li key={assessment.id}>
-                  <button
-                    className={`assessment-list-item ${selectedAssessment?.id === assessment.id ? 'selected' : ''}`}
-                    type="button"
-                    onClick={() => { setSelectedId(assessment.id); setScoreErrors({}); setFeedback('') }}
-                  >
-                    <span><strong>{assessment.title}</strong><small>{assessment.subject} · {assessment.className}</small></span>
-                    <span><time dateTime={assessment.date}>{formatDate(assessment.date)}</time><small>Max {assessment.maximum}</small></span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+      {loading ? (
+        <Panel eyebrow="School records" title="Assessments">
+          <p>Loading your school's assessment records...</p>
         </Panel>
+      ) : (
+        <>
+          <section className="assessment-overview-grid">
+            <Panel eyebrow="School register" title="Assessments">
+              <FormField
+                id="assessment-search"
+                label="Search assessments"
+              >
+                <input
+                  id="assessment-search"
+                  type="search"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search by title or class"
+                />
+              </FormField>
 
-        {selectedAssessment && (
-          <Panel
-            eyebrow={`${selectedAssessment.subject} · ${selectedAssessment.className}`}
-            title={selectedAssessment.title}
-            action={<button type="button" className="secondary-button" onClick={saveResults}><Save size={16} aria-hidden="true" /> Save results locally</button>}
-          >
-            <div className="assessment-summary">
-              <span><strong>{selectedAssessment.maximum}</strong> maximum score</span>
-              <span><strong>{assessedCount}</strong> of {selectedLearners.length} scores entered</span>
-              <span><strong>{assessedCount ? `${currentAverage}%` : '—'}</strong> class average</span>
-            </div>
-            <div className="responsive-register" role="table" aria-label={`Results for ${selectedAssessment.title}`}>
-              <div className="register-row register-header" role="row">
-                <span role="columnheader">Learner</span><span role="columnheader">Score</span><span role="columnheader">Maximum</span><span role="columnheader">Percentage</span>
-              </div>
-              {selectedLearners.map((learner) => {
-                const result = selectedAssessment.results.find((item) => item.learnerId === learner.id)
-                const percent = result?.score !== '' && result?.score !== null && result
-                  ? `${Math.round((Number(result.score) / selectedAssessment.maximum) * 100)}%`
-                  : '—'
-                return (
-                  <div className="register-row results-row" role="row" key={learner.id}>
-                    <span className="register-learner" role="cell"><strong>{learner.name}</strong><small>Demo learner</small></span>
-                    <span role="cell">
-                      <input
-                        className="score-entry"
-                        type="number"
-                        min="0"
-                        max={selectedAssessment.maximum}
-                        step="any"
-                        inputMode="decimal"
-                        aria-label={`Score for ${learner.name}`}
-                        aria-invalid={Boolean(scoreErrors[learner.id])}
-                        aria-describedby={scoreErrors[learner.id] ? `score-error-${learner.id}` : undefined}
-                        value={result?.score ?? ''}
-                        onChange={(event) => updateScore(learner.id, event.target.value)}
-                      />
-                      {scoreErrors[learner.id] && <small className="field-error" id={`score-error-${learner.id}`}>{scoreErrors[learner.id]}</small>}
+              {filteredAssessments.length === 0 ? (
+                <EmptyState
+                  title={
+                    assessments.length === 0
+                      ? 'No assessments recorded yet'
+                      : 'No matching assessments'
+                  }
+                  description={
+                    assessments.length === 0
+                      ? 'Create your first assessment to begin recording learner results.'
+                      : 'Try a different search term.'
+                  }
+                />
+              ) : (
+                <ul className="assessment-list">
+                  {filteredAssessments.map((assessment) => (
+                    <li key={assessment.id}>
+                      <button
+                        className={`assessment-list-item ${
+                          selectedId === assessment.id ? 'selected' : ''
+                        }`}
+                        type="button"
+                        onClick={() => {
+                          setSelectedId(assessment.id)
+                          setError('')
+                          setFeedback('')
+                        }}
+                      >
+                        <span>
+                          <strong>{assessment.title}</strong>
+                          <small>
+                            {assessment.schoolClass?.name ??
+                              'Class unavailable'}
+                          </small>
+                        </span>
+
+                        <span>
+                          <time dateTime={String(assessment.date).slice(0, 10)}>
+                            {formatDate(assessment.date)}
+                          </time>
+                          <small>Max {assessment.maxScore}</small>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
+
+            <Panel
+              eyebrow={
+                selectedAssessment?.schoolClass?.name ??
+                'Assessment results'
+              }
+              title={selectedAssessment?.title ?? 'Select an assessment'}
+              action={
+                selectedAssessment ? (
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={saveResults}
+                    disabled={saving || detailLoading || !selectedDetail}
+                  >
+                    <Save size={16} aria-hidden="true" />
+                    {saving ? 'Saving...' : 'Save results'}
+                  </button>
+                ) : null
+              }
+            >
+              {!selectedAssessment ? (
+                <EmptyState
+                  title="No assessment selected"
+                  description="Create an assessment or select an existing one."
+                />
+              ) : detailLoading ? (
+                <p>Loading assessment results and learners...</p>
+              ) : (
+                <>
+                  {selectedDetail?.description && (
+                    <p>{selectedDetail.description}</p>
+                  )}
+
+                  <div className="assessment-summary">
+                    <span>
+                      <strong>{selectedAssessment.maxScore}</strong>
+                      {' '}maximum score
                     </span>
-                    <span role="cell">{selectedAssessment.maximum}</span>
-                    <strong role="cell">{percent}</strong>
-                  </div>
-                )
-              })}
-            </div>
-          </Panel>
-        )}
-      </section>
 
-      <section className="panel-grid assessment-charts" aria-label="Assessment performance">
-        {performanceByClass.length > 0
-          ? <AssessmentChart data={performanceByClass} title="Class performance summary" eyebrow="Demonstration averages" ariaLabel="Demonstration class performance averages" />
-          : <Panel eyebrow="Class averages" title="Performance summary"><EmptyState title="No scored results yet" description="Enter scores to see class averages." /></Panel>}
-        {trend.length > 0
-          ? <PerformanceTrendChart data={trend} />
-          : <Panel eyebrow="Results over time" title="Performance trend"><EmptyState title="No assessment history yet" description="Entered results will appear here as a demonstration trend." /></Panel>}
-      </section>
+                    <span>
+                      <strong>{assessedCount}</strong>
+                      {' '}of {learners.length} scores entered
+                    </span>
+
+                    <span>
+                      <strong>
+                        {assessedCount ? `${currentAverage}%` : '—'}
+                      </strong>
+                      {' '}class average
+                    </span>
+                  </div>
+
+                  {learners.length === 0 ? (
+                    <EmptyState
+                      title="No learners in this class"
+                      description="Add learners to this class before recording assessment scores."
+                    />
+                  ) : (
+                    <div
+                      className="responsive-register"
+                      role="table"
+                      aria-label={`Results for ${selectedAssessment.title}`}
+                    >
+                      <div
+                        className="register-row register-header"
+                        role="row"
+                      >
+                        <span role="columnheader">Learner</span>
+                        <span role="columnheader">Score</span>
+                        <span role="columnheader">Maximum</span>
+                        <span role="columnheader">Percentage</span>
+                      </div>
+
+                      {learners.map((learner) => {
+                        const rawScore = scores[learner.id] ?? ''
+                        const numericScore =
+                          rawScore === '' ? null : Number(rawScore)
+
+                        const percentage =
+                          numericScore !== null &&
+                          Number.isFinite(numericScore)
+                            ? `${Math.round(
+                                (numericScore / selectedAssessment.maxScore) *
+                                  100
+                              )}%`
+                            : '—'
+
+                        const existingResult = resultByLearner[learner.id]
+
+                        return (
+                          <div
+                            className="register-row results-row"
+                            role="row"
+                            key={learner.id}
+                          >
+                            <span
+                              className="register-learner"
+                              role="cell"
+                            >
+                              <strong>{learnerName(learner)}</strong>
+                              <small>
+                                {learner.admissionNumber}
+                                {!learner.isActive ? ' · Inactive' : ''}
+                              </small>
+                            </span>
+
+                            <span role="cell">
+                              <input
+                                className="score-entry"
+                                type="number"
+                                min="0"
+                                max={selectedAssessment.maxScore}
+                                step="1"
+                                inputMode="numeric"
+                                aria-label={`Score for ${learnerName(learner)}`}
+                                value={rawScore}
+                                onChange={(event) =>
+                                  handleScoreChange(
+                                    learner.id,
+                                    event.target.value
+                                  )
+                                }
+                                disabled={saving}
+                              />
+                            </span>
+
+                            <span role="cell">
+                              {selectedAssessment.maxScore}
+                            </span>
+
+                            <strong role="cell">{percentage}</strong>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {learners.length > 0 && (
+                    <p className="form-hint">
+                      {saving
+                        ? 'Saving learner scores to the school database...'
+                        : 'Enter scores and select Save results to store them in the school database.'}
+                    </p>
+                  )}
+                </>
+              )}
+            </Panel>
+          </section>
+
+          <section
+            className="panel-grid assessment-charts"
+            aria-label="Assessment performance"
+          >
+            {performanceByClass.length > 0 ? (
+              <AssessmentChart
+                data={performanceByClass}
+                title="Selected class performance"
+                eyebrow="Saved and entered scores"
+                ariaLabel="Selected class assessment average"
+              />
+            ) : (
+              <Panel eyebrow="Class averages" title="Performance summary">
+                <EmptyState
+                  title="No scored results yet"
+                  description="Enter learner scores to calculate the class average."
+                />
+              </Panel>
+            )}
+
+            {trend.length > 0 ? (
+              <PerformanceTrendChart data={trend} />
+            ) : (
+              <Panel eyebrow="Assessment results" title="Performance overview">
+                <EmptyState
+                  title="No assessment results yet"
+                  description="Performance information will appear after scores have been entered."
+                />
+              </Panel>
+            )}
+          </section>
+        </>
+      )}
     </main>
   )
 }
