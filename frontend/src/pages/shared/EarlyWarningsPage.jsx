@@ -1,247 +1,712 @@
-import { useMemo, useState } from 'react'
-import { Check, Clock3, Search, ShieldCheck } from 'lucide-react'
-import { demoAlerts, demoClasses, demoNotice } from '../../data/mock/operations'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  AlertTriangle,
+  Check,
+  Clock3,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+} from 'lucide-react'
+
+import { useAuth } from '../../context/useAuth'
+import { apiRequest } from '../../lib/api'
 import ConfirmDialog from '../../components/common/ConfirmDialog'
-import DemoNotice from '../../components/common/DemoNotice'
-import EmptyState from '../../components/common/EmptyState'
-import FormField from '../../components/common/FormField'
 import PageHeading from '../../components/common/PageHeading'
 import Panel from '../../components/common/Panel'
-import StatusBadge from '../../components/common/StatusBadge'
 
-const dateFormatter = new Intl.DateTimeFormat('en', { dateStyle: 'medium' })
-const formatDate = (date) => dateFormatter.format(new Date(`${date}T00:00:00`))
+const formatDate = (value) => {
+  if (!value) return 'Date unavailable'
 
-function EarlyWarningsPage({ role }) {
-  const isTeacher = role === 'teacher'
-  const [alerts, setAlerts] = useState(demoAlerts)
-  const [selectedId, setSelectedId] = useState(demoAlerts[0]?.id ?? '')
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) return 'Date unavailable'
+
+  return new Intl.DateTimeFormat('en', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(date)
+}
+
+const formatDateRange = (start, end) => {
+  if (!start && !end) return 'Date range unavailable'
+  if (!end) return formatDate(start)
+  if (!start) return formatDate(end)
+
+  return `${formatDate(start)} – ${formatDate(end)}`
+}
+
+const formatStatus = (status) => {
+  if (!status) return 'Unknown'
+
+  return status.charAt(0) + status.slice(1).toLowerCase()
+}
+
+const formatAlertType = (type) => {
+  if (type === 'REPEATED_ABSENCES') return 'Repeated absences'
+  if (type === 'ACADEMIC_DECLINE') return 'Academic decline'
+
+  return type?.replaceAll('_', ' ').toLowerCase() ?? 'Early warning'
+}
+
+const getLearnerName = (alert) => {
+  const learner = alert?.learner
+
+  if (!learner) return 'Learner unavailable'
+
+  return [learner.firstName, learner.lastName].filter(Boolean).join(' ')
+    || 'Learner unavailable'
+}
+
+const getEvidence = (alert) => {
+  if (!alert?.evidence || typeof alert.evidence !== 'object') return {}
+
+  return alert.evidence
+}
+
+const getErrorMessage = (error, fallback) => {
+  return error?.message || fallback
+}
+
+const getList = (response) => {
+  if (!response?.success || !Array.isArray(response.data)) {
+    throw new Error('The server returned an invalid alerts response.')
+  }
+
+  return response.data
+}
+
+function EvidenceDetails({ alert }) {
+  const evidence = getEvidence(alert)
+
+  if (alert.alertType === 'REPEATED_ABSENCES') {
+    const absenceCount = evidence.absenceCount ?? alert.absencesCount
+    const threshold = evidence.threshold
+    const observationPeriod = evidence.observationPeriodDays
+    const start = evidence.absenceDateRange ?? alert.absenceDateRange
+    const end = evidence.dateRangeEnd
+
+    return (
+      <div className="evidence-section">
+        <h3>Attendance evidence</h3>
+
+        <div className="alert-record-evidence">
+          <div>
+            <span>Recorded absences</span>
+            <strong>{absenceCount ?? 'Not available'}</strong>
+          </div>
+
+          <div>
+            <span>Configured threshold</span>
+            <strong>{threshold != null ? `${threshold} absences` : 'Not available'}</strong>
+          </div>
+
+          <div>
+            <span>Observation period</span>
+            <strong>
+              {observationPeriod != null
+                ? `${observationPeriod} days`
+                : 'Not available'}
+            </strong>
+          </div>
+
+          <div>
+            <span>Date range</span>
+            <strong>{formatDateRange(start, end)}</strong>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (alert.alertType === 'ACADEMIC_DECLINE') {
+    const first = evidence.firstAssessment
+    const last = evidence.lastAssessment
+
+    return (
+      <div className="evidence-section">
+        <h3>Assessment evidence</h3>
+
+        <div className="alert-record-evidence">
+          <div>
+            <span>Assessments compared</span>
+            <strong>
+              {evidence.assessmentsCompared ?? alert.assessmentsCompared ?? 'Not available'}
+            </strong>
+          </div>
+
+          <div>
+            <span>Required decline</span>
+            <strong>
+              {evidence.declineThreshold ?? alert.declineThreshold ?? 'Not available'}
+              {evidence.declineThreshold != null || alert.declineThreshold != null
+                ? '%'
+                : ''}
+            </strong>
+          </div>
+        </div>
+
+        <div className="alert-assessment-comparison">
+          <div>
+            <span>Earlier assessment</span>
+            <h4>{first?.title || 'Assessment unavailable'}</h4>
+            <strong>
+              {first?.percentage != null
+                ? `${first.percentage}%`
+                : 'Score unavailable'}
+            </strong>
+            <p>
+              {first?.score != null && first?.maxScore != null
+                ? `${first.score} / ${first.maxScore}`
+                : 'Score details unavailable'}
+            </p>
+            <small>{formatDate(first?.date)}</small>
+          </div>
+
+          <div>
+            <span>Latest assessment</span>
+            <h4>{last?.title || 'Assessment unavailable'}</h4>
+            <strong>
+              {last?.percentage != null
+                ? `${last.percentage}%`
+                : 'Score unavailable'}
+            </strong>
+            <p>
+              {last?.score != null && last?.maxScore != null
+                ? `${last.score} / ${last.maxScore}`
+                : 'Score details unavailable'}
+            </p>
+            <small>{formatDate(last?.date)}</small>
+          </div>
+        </div>
+
+        {evidence.firstAssessment && evidence.lastAssessment && (
+          <p className="alert-evidence-summary">
+            The recorded performance declined by{' '}
+            <strong>
+              {Math.round(
+                evidence.firstAssessment.percentage -
+                evidence.lastAssessment.percentage
+              )} percentage points
+            </strong>{' '}
+            between these assessments.
+          </p>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="evidence-section">
+      <h3>Evidence</h3>
+      <p>Detailed evidence is not available for this alert.</p>
+    </div>
+  )
+}
+
+function EarlyWarningsPage() {
+  const { activeMembership } = useAuth()
+
+  const schoolId = activeMembership?.schoolId
+  const role = activeMembership?.role
+  const isTeacher = role === 'TEACHER'
+
+  const [alerts, setAlerts] = useState([])
+  const [selectedId, setSelectedId] = useState('')
+  const [selectedDetail, setSelectedDetail] = useState(null)
+  const [detailRefreshKey, setDetailRefreshKey] = useState(0)
+
   const [typeFilter, setTypeFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
   const [classFilter, setClassFilter] = useState('all')
   const [search, setSearch] = useState('')
-  const [resolveId, setResolveId] = useState('')
+
+  const [loading, setLoading] = useState(true)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [actionLoading, setActionLoading] = useState(false)
+  const [error, setError] = useState('')
   const [feedback, setFeedback] = useState('')
+  const [resolveId, setResolveId] = useState('')
 
-  const visibleAlerts = useMemo(() => alerts.filter((alert) => {
-    if (isTeacher && !['Grade 4A', 'Grade 5B'].includes(alert.className)) return false
-    if (typeFilter !== 'all' && alert.category !== typeFilter) return false
-    if (statusFilter !== 'all' && alert.status !== statusFilter) return false
-    if (classFilter !== 'all' && alert.className !== classFilter) return false
-    return alert.learner.toLowerCase().includes(search.trim().toLowerCase())
-  }), [alerts, classFilter, isTeacher, search, statusFilter, typeFilter])
+  const alertsPath = schoolId
+    ? `/schools/${encodeURIComponent(schoolId)}/early-warning/alerts`
+    : ''
 
-  const selectedAlert = visibleAlerts.find((alert) => alert.id === selectedId)
-    ?? visibleAlerts[0]
-
-  const counts = useMemo(() => {
-    const scoped = alerts.filter((alert) => !isTeacher || ['Grade 4A', 'Grade 5B'].includes(alert.className))
-    return {
-      active: scoped.filter((alert) => alert.status === 'Active').length,
-      attendance: scoped.filter((alert) => alert.category === 'attendance' && alert.status === 'Active').length,
-      academic: scoped.filter((alert) => alert.category === 'academic' && alert.status === 'Active').length,
-      acknowledged: scoped.filter((alert) => alert.status === 'Acknowledged').length,
-      resolved: scoped.filter((alert) => alert.status === 'Resolved').length,
+  const loadAlerts = useCallback(async () => {
+    if (!schoolId) {
+      setLoading(false)
+      setError('Your account is not connected to a school membership.')
+      return
     }
-  }, [alerts, isTeacher])
 
-  function updateAlert(alertId, nextStatus) {
-    setAlerts((current) => current.map((alert) => {
-      if (alert.id !== alertId) return alert
-      return {
-        ...alert,
-        status: nextStatus,
-        history: [
-          ...alert.history,
-          {
-            date: new Date().toISOString().slice(0, 10),
-            action: nextStatus,
-            by: `${isTeacher ? 'Teacher' : 'Administrator'} · local demo`,
-          },
-        ],
+    setLoading(true)
+    setError('')
+
+    try {
+      const response = await apiRequest(alertsPath)
+      const data = getList(response)
+
+      setAlerts(data)
+
+      setSelectedId((currentId) => {
+        if (currentId && data.some((alert) => alert.id === currentId)) {
+          return currentId
+        }
+
+        return data[0]?.id ?? ''
+      })
+    } catch (requestError) {
+      setError(getErrorMessage(requestError, 'Unable to load early warnings.'))
+      setAlerts([])
+      setSelectedId('')
+    } finally {
+      setLoading(false)
+    }
+  }, [alertsPath, schoolId])
+
+  useEffect(() => {
+    loadAlerts()
+  }, [loadAlerts])
+
+  useEffect(() => {
+    if (!schoolId || !selectedId) {
+      setSelectedDetail(null)
+      return
+    }
+
+    let cancelled = false
+
+    const loadDetail = async () => {
+      setDetailLoading(true)
+
+      try {
+        const response = await apiRequest(
+          `${alertsPath}/${encodeURIComponent(selectedId)}`
+        )
+
+        if (!response?.success || !response.data) {
+          throw new Error('The server returned an invalid alert detail response.')
+        }
+
+        if (!cancelled) {
+          setSelectedDetail(response.data)
+        }
+      } catch (requestError) {
+        if (!cancelled) {
+          setSelectedDetail(null)
+          setFeedback(
+            getErrorMessage(requestError, 'Unable to load alert details.')
+          )
+        }
+      } finally {
+        if (!cancelled) {
+          setDetailLoading(false)
+        }
       }
-    }))
-    setFeedback(`Alert ${alertId} marked ${nextStatus.toLowerCase()} locally. This change is not saved to a school system.`)
-    setResolveId('')
+    }
+
+    loadDetail()
+
+    return () => {
+      cancelled = true
+    }
+  }, [alertsPath, schoolId, selectedId, detailRefreshKey])
+
+  const classOptions = useMemo(() => {
+    const classes = new Map()
+
+    alerts.forEach((alert) => {
+      if (alert.class?.id) {
+        classes.set(alert.class.id, alert.class.name || 'Unnamed class')
+      }
+    })
+
+    return Array.from(classes.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [alerts])
+
+  const visibleAlerts = useMemo(() => {
+    const query = search.trim().toLowerCase()
+
+    return alerts.filter((alert) => {
+      if (typeFilter !== 'all' && alert.alertType !== typeFilter) return false
+      if (statusFilter !== 'all' && alert.status !== statusFilter) return false
+      if (classFilter !== 'all' && alert.class?.id !== classFilter) return false
+
+      if (query) {
+        const learnerName = getLearnerName(alert).toLowerCase()
+        const className = (alert.class?.name || '').toLowerCase()
+
+        if (!learnerName.includes(query) && !className.includes(query)) {
+          return false
+        }
+      }
+
+      return true
+    })
+  }, [alerts, classFilter, search, statusFilter, typeFilter])
+
+  useEffect(() => {
+    if (visibleAlerts.length === 0) {
+      if (selectedId) setSelectedId('')
+      return
+    }
+
+    if (!visibleAlerts.some((alert) => alert.id === selectedId)) {
+      setSelectedId(visibleAlerts[0].id)
+    }
+  }, [visibleAlerts, selectedId])
+
+  const selectedAlert = visibleAlerts.find(
+    (alert) => alert.id === selectedId
+  ) ?? visibleAlerts[0] ?? null
+
+  const activeCount = alerts.filter((alert) => alert.status === 'ACTIVE').length
+  const acknowledgedCount = alerts.filter(
+    (alert) => alert.status === 'ACKNOWLEDGED'
+  ).length
+  const resolvedCount = alerts.filter(
+    (alert) => alert.status === 'RESOLVED'
+  ).length
+
+  const handleStatusChange = async (alertId, action) => {
+    if (!schoolId || !alertId || actionLoading) return
+
+    setActionLoading(true)
+    setFeedback('')
+
+    try {
+      const response = await apiRequest(
+        `${alertsPath}/${encodeURIComponent(alertId)}/${action}`,
+        { method: 'PATCH' }
+      )
+
+      if (!response?.success) {
+        throw new Error('The server could not update this alert.')
+      }
+
+      setFeedback(
+        action === 'acknowledge'
+          ? 'Alert acknowledged successfully.'
+          : 'Alert resolved successfully.'
+      )
+
+      setResolveId('')
+      setDetailRefreshKey((current) => current + 1)
+      await loadAlerts()
+    } catch (requestError) {
+      setFeedback(
+        getErrorMessage(requestError, 'Unable to update this alert.')
+      )
+    } finally {
+      setActionLoading(false)
+    }
   }
 
-  const classes = demoClasses.filter((item) => !isTeacher || ['Grade 4A', 'Grade 5B'].includes(item.name))
+  const history = selectedDetail?.alertStatusHistories ?? []
 
   return (
-    <main className="content">
+    <div className="page-content">
       <PageHeading
-        eyebrow={isTeacher ? 'Assigned classes' : 'School-level monitoring'}
-        title="Early-warning alerts"
-        description={isTeacher
-          ? 'Review demonstration alerts for assigned classes only.'
-          : 'Review repeated absences and declining assessment results across the demonstration school.'}
+        title="Early warnings"
+        description={
+          isTeacher
+            ? 'Review attendance and academic concerns for your assigned classes.'
+            : 'Monitor learner attendance and academic performance concerns across your school.'
+        }
       />
-      <DemoNotice>{demoNotice} Alert actions update this page locally only.</DemoNotice>
-      {feedback && <p className="form-feedback" role="status">{feedback}</p>}
 
-      <section className="stats-grid alert-summary-grid" aria-label="Alert summary">
-        <article className="summary-card"><span>Active alerts</span><strong>{counts.active}</strong><ShieldCheck size={18} aria-hidden="true" /></article>
-        <article className="summary-card"><span>Repeated absences</span><strong>{counts.attendance}</strong><Clock3 size={18} aria-hidden="true" /></article>
-        <article className="summary-card"><span>Academic decline</span><strong>{counts.academic}</strong><span className="summary-icon">%</span></article>
-        <article className="summary-card"><span>Acknowledged</span><strong>{counts.acknowledged}</strong><Check size={18} aria-hidden="true" /></article>
-        <article className="summary-card"><span>Resolved</span><strong>{counts.resolved}</strong><Check size={18} aria-hidden="true" /></article>
-      </section>
+      {feedback && (
+        <div className="alert-feedback" role="status">
+          {feedback}
+          <button
+            type="button"
+            onClick={() => setFeedback('')}
+            aria-label="Dismiss message"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
-      <Panel eyebrow="Alert inbox" title="Find an alert">
-        <div className="filter-grid alert-filters">
-          <FormField id="alert-search" label="Search learner">
-            <div className="input-with-icon">
-              <Search size={16} aria-hidden="true" />
+      {error && (
+        <div className="alert-error" role="alert">
+          <AlertTriangle size={18} />
+          <span>{error}</span>
+          <button type="button" onClick={loadAlerts}>
+            Try again
+          </button>
+        </div>
+      )}
+
+      <div className="alert-summary-grid">
+        <div className="alert-summary-card">
+          <span>Active alerts</span>
+          <strong>{activeCount}</strong>
+          <small>Require attention</small>
+        </div>
+
+        <div className="alert-summary-card">
+          <span>Acknowledged</span>
+          <strong>{acknowledgedCount}</strong>
+          <small>Being followed up</small>
+        </div>
+
+        <div className="alert-summary-card">
+          <span>Resolved</span>
+          <strong>{resolvedCount}</strong>
+          <small>Marked as addressed</small>
+        </div>
+
+        <div className="alert-summary-card">
+          <span>Total alerts</span>
+          <strong>{alerts.length}</strong>
+          <small>Available records</small>
+        </div>
+      </div>
+
+      <div className="alert-workspace">
+        <Panel>
+          <div className="alert-list-heading">
+            <div>
+              <h2>Alert records</h2>
+              <p>{visibleAlerts.length} matching records</p>
+            </div>
+
+            <button
+              type="button"
+              className="alert-refresh-button"
+              onClick={loadAlerts}
+              disabled={loading}
+              aria-label="Refresh alerts"
+            >
+              <RefreshCw size={17} className={loading ? 'spin' : ''} />
+              Refresh
+            </button>
+          </div>
+
+          <div className="alert-filter-controls">
+            <label className="alert-search">
+              <Search size={17} />
               <input
-                id="alert-search"
                 type="search"
+                placeholder="Search learners or classes"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Learner name"
               />
-            </div>
-          </FormField>
-          <FormField id="alert-type-filter" label="Alert type">
-            <select id="alert-type-filter" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
-              <option value="all">All alert types</option>
-              <option value="attendance">Repeated absences</option>
-              <option value="academic">Declining marks</option>
-            </select>
-          </FormField>
-          <FormField id="alert-status-filter" label="Status">
-            <select id="alert-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-              <option value="all">All statuses</option>
-              <option value="Active">Active</option>
-              <option value="Acknowledged">Acknowledged</option>
-              <option value="Resolved">Resolved</option>
-            </select>
-          </FormField>
-          <FormField id="alert-class-filter" label="Class">
-            <select id="alert-class-filter" value={classFilter} onChange={(event) => setClassFilter(event.target.value)}>
-              <option value="all">All classes</option>
-              {classes.map((classroom) => <option key={classroom.id} value={classroom.name}>{classroom.name}</option>)}
-            </select>
-          </FormField>
-        </div>
-      </Panel>
+            </label>
 
-      <section className="alert-workspace" aria-label="Alert list and details">
-        <Panel eyebrow={`${visibleAlerts.length} matching`} title="Alerts">
-          {visibleAlerts.length === 0 ? (
-            <EmptyState title="No alerts match these filters" description="Try a different learner name, alert type, status, or class." />
+            <label>
+              <span className="sr-only">Alert type</span>
+              <select
+                value={typeFilter}
+                onChange={(event) => setTypeFilter(event.target.value)}
+              >
+                <option value="all">All alert types</option>
+                <option value="REPEATED_ABSENCES">Repeated absences</option>
+                <option value="ACADEMIC_DECLINE">Academic decline</option>
+              </select>
+            </label>
+
+            <label>
+              <span className="sr-only">Alert status</span>
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+              >
+                <option value="all">All statuses</option>
+                <option value="ACTIVE">Active</option>
+                <option value="ACKNOWLEDGED">Acknowledged</option>
+                <option value="RESOLVED">Resolved</option>
+              </select>
+            </label>
+
+            <label>
+              <span className="sr-only">Class</span>
+              <select
+                value={classFilter}
+                onChange={(event) => setClassFilter(event.target.value)}
+              >
+                <option value="all">All classes</option>
+                {classOptions.map((classOption) => (
+                  <option key={classOption.id} value={classOption.id}>
+                    {classOption.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          {loading ? (
+            <div className="alert-empty-state">
+              <RefreshCw size={22} className="spin" />
+              <p>Loading early warnings...</p>
+            </div>
+          ) : visibleAlerts.length === 0 ? (
+            <div className="alert-empty-state">
+              <ShieldCheck size={28} />
+              <h3>No matching alerts</h3>
+              <p>
+                {alerts.length === 0
+                  ? 'There are no early warning records available for your account yet.'
+                  : 'Try changing your search or filters.'}
+              </p>
+            </div>
           ) : (
-            <ul className="alert-record-list">
+            <div className="alert-record-list">
               {visibleAlerts.map((alert) => (
-                <li key={alert.id}>
-                  <button
-                    type="button"
-                    className={`alert-record ${selectedAlert?.id === alert.id ? 'selected' : ''}`}
-                    onClick={() => setSelectedId(alert.id)}
-                    aria-current={selectedAlert?.id === alert.id ? 'true' : undefined}
-                  >
-                    <span className={`alert-record-indicator ${alert.severity}`} aria-hidden="true" />
-                    <span className="alert-record-main">
-                      <strong>{alert.learner}</strong>
-                      <span>{alert.className} · {alert.type}</span>
-                      <span className="alert-record-evidence">{alert.evidence}</span>
+                <button
+                  type="button"
+                  key={alert.id}
+                  className={`alert-record ${selectedAlert?.id === alert.id ? 'selected' : ''}`}
+                  onClick={() => setSelectedId(alert.id)}
+                >
+                  <span
+                    className={`alert-record-indicator ${
+                      alert.alertType === 'ACADEMIC_DECLINE' ? 'low' : 'high'
+                    }`}
+                  />
+
+                  <span className="alert-record-main">
+                    <strong>{getLearnerName(alert)}</strong>
+                    <span>{alert.class?.name || 'Class unavailable'}</span>
+                    <span>{formatAlertType(alert.alertType)}</span>
+                  </span>
+
+                  <span className="alert-record-meta">
+                    <span className={`alert-status status-${alert.status?.toLowerCase()}`}>
+                      {formatStatus(alert.status)}
                     </span>
-                    <span className="alert-record-meta">
-                      <StatusBadge tone={`status-${alert.status.toLowerCase()}`}>{alert.status}</StatusBadge>
-                      <time dateTime={alert.detected}>{formatDate(alert.detected)}</time>
-                    </span>
-                  </button>
-                </li>
+                    <small>{formatDate(alert.createdAt)}</small>
+                  </span>
+                </button>
               ))}
-            </ul>
+            </div>
           )}
         </Panel>
 
-        {selectedAlert && (
-          <Panel
-            eyebrow={`${selectedAlert.id} · ${selectedAlert.className}`}
-            title={selectedAlert.learner}
-            className="alert-detail-panel"
-          >
-            <div className="detail-meta">
-              <StatusBadge tone={`status-${selectedAlert.status.toLowerCase()}`}>{selectedAlert.status}</StatusBadge>
-              <StatusBadge tone={`severity-${selectedAlert.severity}`}>{selectedAlert.type}</StatusBadge>
-              <span>Detected {formatDate(selectedAlert.detected)}</span>
+        <Panel>
+          {!selectedAlert ? (
+            <div className="alert-empty-state">
+              <AlertTriangle size={26} />
+              <h3>Select an alert</h3>
+              <p>Choose an alert record to review its evidence and history.</p>
             </div>
-            <div className="evidence-explanation">
-              <strong>Why this alert was triggered</strong>
-              <p>{selectedAlert.explanation}</p>
-              <p>{selectedAlert.evidence}</p>
-            </div>
+          ) : (
+            <div className="alert-detail">
+              <div className="alert-detail-heading">
+                <div>
+                  <span className="alert-detail-type">
+                    {formatAlertType(selectedAlert.alertType)}
+                  </span>
+                  <h2>{getLearnerName(selectedAlert)}</h2>
+                  <p>{selectedAlert.class?.name || 'Class unavailable'}</p>
+                </div>
 
-            {selectedAlert.category === 'attendance' ? (
-              <section className="evidence-section" aria-label="Attendance evidence">
-                <h4>Attendance evidence</h4>
-                <ul className="evidence-list">
-                  {selectedAlert.attendanceEvidence.map((item) => (
-                    <li key={`${selectedAlert.id}-${item.date}`}>
-                      <time dateTime={item.date}>{formatDate(item.date)}</time>
-                      <StatusBadge tone="status-active">{item.status}</StatusBadge>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : (
-              <section className="evidence-section" aria-label="Assessment history evidence">
-                <h4>Assessment history</h4>
-                <ul className="evidence-list">
-                  {selectedAlert.assessmentHistory.map((item) => (
-                    <li key={`${selectedAlert.id}-${item.date}`}>
-                      <span><strong>{item.title}</strong><small>{formatDate(item.date)}</small></span>
-                      <strong>{Math.round((item.score / item.maximum) * 100)}%</strong>
-                    </li>
-                  ))}
-                </ul>
-                {selectedAlert.assessmentHistory.length > 1 && (
-                  <p className="comparison-note">
-                    Change: {Math.round((selectedAlert.assessmentHistory.at(-1).score / selectedAlert.assessmentHistory.at(-1).maximum) * 100)
-                      - Math.round((selectedAlert.assessmentHistory[0].score / selectedAlert.assessmentHistory[0].maximum) * 100)} percentage points.
-                  </p>
-                )}
-              </section>
-            )}
+                <span className={`alert-status status-${selectedAlert.status?.toLowerCase()}`}>
+                  {formatStatus(selectedAlert.status)}
+                </span>
+              </div>
 
-            <section className="evidence-section" aria-label="Alert history">
-              <h4>Alert history</h4>
-              <ul className="activity-list">
-                {selectedAlert.history.map((entry, index) => (
-                  <li className="activity-item" key={`${entry.date}-${entry.action}-${index}`}>
-                    <span className="activity-marker" aria-hidden="true" />
-                    <span className="activity-copy"><strong>{entry.action}</strong><span>{entry.by}</span></span>
-                    <time dateTime={entry.date}>{formatDate(entry.date)}</time>
-                  </li>
-                ))}
-              </ul>
-            </section>
-            <div className="alert-actions">
-              {selectedAlert.status === 'Active' && (
-                <button className="secondary-button" type="button" onClick={() => updateAlert(selectedAlert.id, 'Acknowledged')}>
-                  <Check size={16} aria-hidden="true" /> Acknowledge alert
-                </button>
-              )}
-              {selectedAlert.status !== 'Resolved' && (
-                <button className="danger-button" type="button" onClick={() => setResolveId(selectedAlert.id)}>
-                  Resolve alert
-                </button>
+              <div className="alert-detail-meta">
+                <div>
+                  <span>Created</span>
+                  <strong>{formatDate(selectedAlert.createdAt)}</strong>
+                </div>
+
+                <div>
+                  <span>Alert rule</span>
+                  <strong>
+                    {selectedAlert.alertRule?.name || 'Rule unavailable'}
+                  </strong>
+                </div>
+              </div>
+
+              {detailLoading ? (
+                <div className="alert-empty-state">
+                  <RefreshCw size={20} className="spin" />
+                  <p>Loading alert details...</p>
+                </div>
+              ) : (
+                <>
+                  <EvidenceDetails alert={selectedDetail || selectedAlert} />
+
+                  <div className="evidence-section">
+                    <h3>Status history</h3>
+
+                    {history.length === 0 ? (
+                      <p>No status changes have been recorded yet.</p>
+                    ) : (
+                      <div className="alert-history-list">
+                        {history.map((item) => (
+                          <div className="alert-history-item" key={item.id}>
+                            <span className="alert-history-icon">
+                              <Clock3 size={16} />
+                            </span>
+
+                            <div>
+                              <strong>
+                                {formatStatus(item.fromStatus)} →{' '}
+                                {formatStatus(item.toStatus)}
+                              </strong>
+                              <p>
+                                {formatDate(item.changedAt)}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="alert-actions">
+                    {selectedAlert.status === 'ACTIVE' && (
+                      <button
+                        type="button"
+                        className="button button-secondary"
+                        disabled={actionLoading}
+                        onClick={() =>
+                          handleStatusChange(selectedAlert.id, 'acknowledge')
+                        }
+                      >
+                        <Check size={17} />
+                        Acknowledge
+                      </button>
+                    )}
+
+                    {['ACTIVE', 'ACKNOWLEDGED'].includes(selectedAlert.status) && (
+                      <button
+                        type="button"
+                        className="button button-primary"
+                        disabled={actionLoading}
+                        onClick={() => setResolveId(selectedAlert.id)}
+                      >
+                        <ShieldCheck size={17} />
+                        Resolve alert
+                      </button>
+                    )}
+
+                    {actionLoading && <span>Updating alert...</span>}
+                  </div>
+                </>
               )}
             </div>
-          </Panel>
-        )}
-      </section>
+          )}
+        </Panel>
+      </div>
+
       {resolveId && (
         <ConfirmDialog
           title="Resolve this alert?"
-          description="This will mark the demonstration alert as resolved in this page only. No school record will be changed."
+          description="This will mark the alert as resolved and record the status change in its history."
           confirmLabel="Resolve alert"
+          busy={actionLoading}
           onCancel={() => setResolveId('')}
-          onConfirm={() => updateAlert(resolveId, 'Resolved')}
+          onConfirm={() => handleStatusChange(resolveId, 'resolve')}
         />
       )}
-    </main>
+    </div>
   )
 }
 
