@@ -1,207 +1,335 @@
-import { useMemo, useState } from 'react'
-import { Check, CheckCheck, Edit3, Send } from 'lucide-react'
-import { initialCommunications, demoClasses, demoNotice } from '../../data/mock/operations'
-import DemoNotice from '../../components/common/DemoNotice'
-import EmptyState from '../../components/common/EmptyState'
-import FormField from '../../components/common/FormField'
-import MessagePreview from '../../components/common/MessagePreview'
+import { useCallback, useEffect, useState } from 'react'
+import { useAuth } from '../../context/useAuth'
+import { apiRequest } from '../../lib/api'
 import PageHeading from '../../components/common/PageHeading'
 import Panel from '../../components/common/Panel'
-import StatusBadge from '../../components/common/StatusBadge'
 
-const communicationStatuses = ['Drafted', 'Pending approval', 'Approved', 'Delivered']
-const statusTone = {
-  Drafted: 'status-neutral',
-  'Pending approval': 'status-warning',
-  Approved: 'status-positive',
-  Delivered: 'status-positive',
+const formatDate = (value) => {
+  if (!value) return 'Date unavailable'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Date unavailable'
+  return new Intl.DateTimeFormat('en', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date)
 }
-const formatDate = (date) => new Intl.DateTimeFormat('en', { dateStyle: 'medium' }).format(new Date(`${date}T00:00:00`))
 
 function ParentCommunicationPage({ role }) {
-  const isTeacher = role === 'teacher'
-  const classOptions = demoClasses.filter((classroom) => !isTeacher || ['Grade 4A', 'Grade 5B'].includes(classroom.name))
-  const [messages, setMessages] = useState(initialCommunications)
-  const [selectedId, setSelectedId] = useState(initialCommunications[0].id)
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [classFilter, setClassFilter] = useState('all')
-  const [feedback, setFeedback] = useState('')
+  const { user, activeMembership } = useAuth()
+  const expectedRole = role === 'teacher' ? 'TEACHER' : 'SCHOOL_ADMIN'
 
-  const visibleMessages = useMemo(() => messages.filter((message) => {
-    if (isTeacher && !['Grade 4A', 'Grade 5B'].includes(message.className)) return false
-    if (statusFilter !== 'all' && message.status !== statusFilter) return false
-    if (classFilter !== 'all' && message.className !== classFilter) return false
-    return true
-  }), [classFilter, isTeacher, messages, statusFilter])
-  const selected = visibleMessages.find((message) => message.id === selectedId) ?? visibleMessages[0]
+  const schoolId =
+    user?.memberships?.find((membership) => membership.role === expectedRole)?.schoolId ||
+    activeMembership?.schoolId
 
-  function updateMessage(id, updates, action) {
-    setMessages((current) => current.map((message) => {
-      if (message.id !== id) return message
-      return {
-        ...message,
-        ...updates,
-        updated: new Date().toISOString().slice(0, 10),
-        history: [
-          ...message.history,
-          {
-            date: new Date().toISOString().slice(0, 10),
-            action,
-            by: `${isTeacher ? 'Teacher' : 'Administrator'} · local demo`,
+  const [drafts, setDrafts] = useState([])
+  const [alerts, setAlerts] = useState([])
+  const [selectedAlertId, setSelectedAlertId] = useState('')
+  const [language, setLanguage] = useState('en')
+  const [loading, setLoading] = useState(true)
+  const [generating, setGenerating] = useState(false)
+  const [editingDraftId, setEditingDraftId] = useState(null)
+  const [draftText, setDraftText] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [approvingDraftId, setApprovingDraftId] = useState(null)
+  const [pageError, setPageError] = useState('')
+  const [actionError, setActionError] = useState('')
+  const [successMessage, setSuccessMessage] = useState('')
+
+  const loadData = useCallback(async () => {
+    if (!schoolId) {
+      setDrafts([])
+      setAlerts([])
+      setLoading(false)
+      setPageError('Your account is not linked to a school.')
+      return
+    }
+
+    setLoading(true)
+    setPageError('')
+
+    try {
+      const [draftResult, alertResult] = await Promise.all([
+        apiRequest(`/schools/${encodeURIComponent(schoolId)}/drafts`),
+        apiRequest(
+          `/schools/${encodeURIComponent(schoolId)}/early-warning/alerts?status=ACTIVE`
+        ),
+      ])
+
+      setDrafts(Array.isArray(draftResult.data) ? draftResult.data : [])
+      setAlerts(Array.isArray(alertResult.data) ? alertResult.data : [])
+    } catch (error) {
+      setPageError(error.message || 'Unable to load communication data.')
+    } finally {
+      setLoading(false)
+    }
+  }, [schoolId])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  const handleGenerateDraft = async (event) => {
+    event.preventDefault()
+    setActionError('')
+    setSuccessMessage('')
+
+    if (!selectedAlertId) {
+      setActionError('Select an active alert first.')
+      return
+    }
+
+    setGenerating(true)
+
+    try {
+      await apiRequest(
+        `/schools/${encodeURIComponent(schoolId)}/drafts/generate`,
+        {
+          method: 'POST',
+          body: {
+            alertId: selectedAlertId,
+            language,
           },
-        ],
-      }
-    }))
-    setFeedback(`${action} updated locally only. No notification was sent.`)
+        }
+      )
+
+      setSelectedAlertId('')
+      setSuccessMessage('Communication draft generated and saved.')
+      await loadData()
+    } catch (error) {
+      setActionError(error.message || 'Unable to generate the draft.')
+    } finally {
+      setGenerating(false)
+    }
   }
 
-  const counts = communicationStatuses.reduce((result, status) => {
-    result[status] = messages.filter((message) =>
-      (!isTeacher || ['Grade 4A', 'Grade 5B'].includes(message.className))
-      && message.status === status).length
-    return result
-  }, {})
+  const startEditing = (draft) => {
+    setEditingDraftId(draft.id)
+    setDraftText(draft.draftText || '')
+    setActionError('')
+    setSuccessMessage('')
+  }
+
+  const cancelEditing = () => {
+    setEditingDraftId(null)
+    setDraftText('')
+  }
+
+  const handleSaveEdit = async (event) => {
+    event.preventDefault()
+    setActionError('')
+    setSuccessMessage('')
+
+    if (!draftText.trim()) {
+      setActionError('The message cannot be empty.')
+      return
+    }
+
+    setSaving(true)
+
+    try {
+      await apiRequest(
+        `/schools/${encodeURIComponent(schoolId)}/drafts/${encodeURIComponent(editingDraftId)}`,
+        {
+          method: 'PATCH',
+          body: { draftText: draftText.trim() },
+        }
+      )
+
+      cancelEditing()
+      setSuccessMessage('Draft updated successfully.')
+      await loadData()
+    } catch (error) {
+      setActionError(error.message || 'Unable to save the draft.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleApproveDraft = async (draftId) => {
+    const confirmed = window.confirm(
+      'Approve this parent communication draft? Approval does not send or deliver the message.'
+    )
+
+    if (!confirmed) return
+
+    setApprovingDraftId(draftId)
+    setActionError('')
+    setSuccessMessage('')
+
+    try {
+      await apiRequest(
+        `/schools/${encodeURIComponent(schoolId)}/drafts/${encodeURIComponent(draftId)}/approve`,
+        { method: 'PATCH' }
+      )
+
+      setSuccessMessage('Draft approved. It has not been sent to the parent.')
+      await loadData()
+    } catch (error) {
+      setActionError(error.message || 'Unable to approve the draft.')
+    } finally {
+      setApprovingDraftId(null)
+    }
+  }
 
   return (
     <main className="content">
       <PageHeading
-        eyebrow={isTeacher ? 'Assigned classes' : 'School communication'}
+        eyebrow={role === 'teacher' ? 'Assigned classes' : 'School communication'}
         title="Parent communication"
-        description="Review supportive in-app messages in English and Shona before they reach families."
+        description="Prepare, review and approve supportive messages about learner progress and early-warning alerts."
       />
-      <DemoNotice>
-        {demoNotice} Message edits, approvals, and delivery states are local only. No messages are sent; WhatsApp and email are not connected.
-      </DemoNotice>
-      {feedback && <p className="form-feedback" role="status">{feedback}</p>}
 
-      <section className="message-status-summary" aria-label="Message status summary">
-        {communicationStatuses.map((status) => (
-          <button
-            type="button"
-            className={`message-count-card ${statusFilter === status ? 'selected' : ''}`}
-            onClick={() => setStatusFilter(statusFilter === status ? 'all' : status)}
-            key={status}
-          >
-            <span>{status}</span><strong>{counts[status]}</strong>
-          </button>
-        ))}
-      </section>
-
-      <section className="communication-workspace" aria-label="Message inbox and preview">
-        <Panel eyebrow="Inbox · demonstration messages" title="Message queue">
-          <div className="filter-grid message-filters">
-            <FormField id="message-status-filter" label="Status">
-              <select id="message-status-filter" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-                <option value="all">All statuses</option>
-                {communicationStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
-              </select>
-            </FormField>
-            <FormField id="message-class-filter" label="Class">
-              <select id="message-class-filter" value={classFilter} onChange={(event) => setClassFilter(event.target.value)}>
-                <option value="all">All classes</option>
-                {classOptions.map((classroom) => <option key={classroom.id} value={classroom.name}>{classroom.name}</option>)}
-              </select>
-            </FormField>
-          </div>
-          {visibleMessages.length === 0 ? (
-            <EmptyState title="No messages in this view" description="Change the selected status or class to see other demonstration messages." />
-          ) : (
-            <ul className="communication-list">
-              {visibleMessages.map((message) => (
-                <li key={message.id}>
-                  <button
-                    type="button"
-                    className={`communication-list-item ${selected?.id === message.id ? 'selected' : ''}`}
-                    onClick={() => { setSelectedId(message.id); setFeedback('') }}
-                  >
-                    <span className="communication-list-topline">
-                      <strong>{message.learner}</strong>
-                      <StatusBadge tone={statusTone[message.status]}>{message.status}</StatusBadge>
-                    </span>
-                    <span>{message.category} · {message.className}</span>
-                    <small>Updated {formatDate(message.updated)}</small>
-                  </button>
-                </li>
+      <Panel eyebrow="New communication" title="Generate a message draft">
+        <form onSubmit={handleGenerateDraft} className="form-inline">
+          <div className="form-field">
+            <label htmlFor="draft-alert">Active alert</label>
+            <select
+              id="draft-alert"
+              value={selectedAlertId}
+              onChange={(event) => setSelectedAlertId(event.target.value)}
+              disabled={generating || alerts.length === 0}
+              required
+            >
+              <option value="">Select an alert</option>
+              {alerts.map((alert) => (
+                <option key={alert.id} value={alert.id}>
+                  {alert.learner
+                    ? `${alert.learner.firstName} ${alert.learner.lastName}`
+                    : alert.class?.name || 'Learner alert'}
+                  {' — '}
+                  {alert.alertRule?.name || alert.alertRule?.alertType || 'Early warning'}
+                </option>
               ))}
-            </ul>
-          )}
-        </Panel>
-
-        {selected ? (
-          <Panel
-            eyebrow={`${selected.id} · ${selected.className}`}
-            title={selected.learner}
-            action={<StatusBadge tone={statusTone[selected.status]}>{selected.status}</StatusBadge>}
-          >
-            <p className="message-category">{selected.category} · Demonstration AI-assisted draft</p>
-            <div className="message-editor">
-              <FormField id="message-english" label="English message">
-                <textarea
-                  id="message-english"
-                  rows="5"
-                  maxLength="800"
-                  value={selected.english}
-                  onChange={(event) => setMessages((current) => current.map((message) => message.id === selected.id
-                    ? { ...message, english: event.target.value }
-                    : message))}
-                />
-              </FormField>
-              <FormField id="message-shona" label="Shona message">
-                <textarea
-                  id="message-shona"
-                  rows="5"
-                  maxLength="800"
-                  lang="sn"
-                  value={selected.shona}
-                  onChange={(event) => setMessages((current) => current.map((message) => message.id === selected.id
-                    ? { ...message, shona: event.target.value }
-                    : message))}
-                />
-              </FormField>
-            </div>
-            <div className="message-actions">
-              <button type="button" className="secondary-button" onClick={() => updateMessage(selected.id, { status: 'Drafted' }, 'Draft saved')}>
-                <Edit3 size={16} aria-hidden="true" /> Save as draft
-              </button>
-              {selected.status === 'Drafted' && (
-                <button type="button" className="secondary-button" onClick={() => updateMessage(selected.id, { status: 'Pending approval' }, 'Submitted for approval')}>
-                  <Send size={16} aria-hidden="true" /> Submit for approval
-                </button>
-              )}
-              {selected.status === 'Pending approval' && (
-                <button type="button" className="primary-button" onClick={() => updateMessage(selected.id, { status: 'Approved' }, 'Approved')}>
-                  <Check size={16} aria-hidden="true" /> Approve message locally
-                </button>
-              )}
-              {!isTeacher && selected.status === 'Approved' && (
-                <button type="button" className="primary-button" onClick={() => updateMessage(selected.id, { status: 'Delivered' }, 'Marked as delivered')}>
-                  <CheckCheck size={16} aria-hidden="true" /> Mark delivered locally
-                </button>
-              )}
-            </div>
-            {selected.status === 'Delivered' && (
-              <p className="delivery-note"><CheckCheck size={16} aria-hidden="true" /> Demonstration in-app notification marked delivered. No message was sent.</p>
+            </select>
+            {alerts.length === 0 && (
+              <small className="field-hint">
+                No active alerts are currently available for your account.
+              </small>
             )}
-            <MessagePreview english={selected.english} shona={selected.shona} />
-            <section className="evidence-section" aria-label="Message notification history">
-              <h4>Approval and notification history</h4>
-              <ul className="activity-list">
-                {selected.history.map((entry, index) => (
-                  <li className="activity-item" key={`${entry.date}-${entry.action}-${index}`}>
-                    <span className="activity-marker" aria-hidden="true" />
-                    <span className="activity-copy"><strong>{entry.action}</strong><span>{entry.by}</span></span>
-                    <time dateTime={entry.date}>{formatDate(entry.date)}</time>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          </Panel>
+          </div>
+
+          <div className="form-field">
+            <label htmlFor="draft-language">Message language</label>
+            <select
+              id="draft-language"
+              value={language}
+              onChange={(event) => setLanguage(event.target.value)}
+              disabled={generating}
+            >
+              <option value="en">English</option>
+              <option value="sn">Shona</option>
+            </select>
+          </div>
+
+          <button type="submit" disabled={generating || alerts.length === 0}>
+            {generating ? 'Generating…' : 'Generate draft'}
+          </button>
+        </form>
+        <p className="field-hint">
+          Review generated text carefully before approving it. Approval does not send a notification.
+        </p>
+      </Panel>
+
+      {actionError && <p className="form-feedback" role="alert">{actionError}</p>}
+      {successMessage && <p className="form-feedback" role="status">{successMessage}</p>}
+      {pageError && <p className="form-feedback" role="alert">{pageError}</p>}
+
+      <Panel eyebrow="Saved communication" title="Message drafts">
+        {loading ? (
+          <p role="status">Loading communication drafts…</p>
+        ) : pageError ? (
+          <button type="button" onClick={loadData}>Try again</button>
+        ) : drafts.length === 0 ? (
+          <p role="status">No communication drafts have been created yet.</p>
         ) : (
-          <Panel eyebrow="Message preview" title="Select a message">
-            <EmptyState title="Nothing selected" description="Choose a message from the demonstration inbox." />
-          </Panel>
+          <div className="draft-list">
+            {drafts.map((draft) => {
+              const learner = draft.alert?.learner
+              const className = draft.alert?.class?.name || 'Class not specified'
+              const learnerName = learner
+                ? `${learner.firstName} ${learner.lastName}`
+                : 'Learner not specified'
+              const alertName =
+                draft.alert?.alertRule?.name ||
+                draft.alert?.alertType ||
+                'Early warning'
+
+              return (
+                <article key={draft.id} className="draft-item">
+                  <div>
+                    <h3>{learnerName}</h3>
+                    <p>
+                      {className} · {alertName} · {draft.language === 'sn' ? 'Shona' : 'English'}
+                    </p>
+                    <p>
+                      Status: <strong>{draft.status}</strong>
+                    </p>
+                    <small>
+                      Created {formatDate(draft.createdAt)}
+                      {draft.createdBy
+                        ? ` · ${draft.createdBy.firstName} ${draft.createdBy.lastName}`
+                        : ''}
+                    </small>
+                  </div>
+
+                  {editingDraftId === draft.id ? (
+                    <form onSubmit={handleSaveEdit}>
+                      <label htmlFor={`draft-text-${draft.id}`}>
+                        Parent communication message
+                      </label>
+                      <textarea
+                        id={`draft-text-${draft.id}`}
+                        value={draftText}
+                        onChange={(event) => setDraftText(event.target.value)}
+                        rows={7}
+                        maxLength={5000}
+                        required
+                      />
+                      <div className="form-inline">
+                        <button type="submit" disabled={saving}>
+                          {saving ? 'Saving…' : 'Save changes'}
+                        </button>
+                        <button type="button" onClick={cancelEditing}>
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <>
+                      <p className="draft-content">{draft.draftText}</p>
+                      {draft.status === 'DRAFT' && (
+                        <div className="form-inline">
+                          <button
+                            type="button"
+                            className="secondary-button"
+                            onClick={() => startEditing(draft)}
+                          >
+                            Edit message
+                          </button>
+                          <button
+                            type="button"
+                            className="primary-button"
+                            onClick={() => handleApproveDraft(draft.id)}
+                            disabled={Boolean(approvingDraftId)}
+                          >
+                            {approvingDraftId === draft.id ? 'Approving…' : 'Approve draft'}
+                          </button>
+                        </div>
+                      )}
+                      {draft.status === 'APPROVED' && (
+                        <p className="field-hint">
+                          Approved. This message has not been sent or delivered.
+                        </p>
+                      )}
+                    </>
+                  )}
+                </article>
+              )
+            })}
+          </div>
         )}
-      </section>
+      </Panel>
     </main>
   )
 }
