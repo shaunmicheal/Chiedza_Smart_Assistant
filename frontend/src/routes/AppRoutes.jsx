@@ -17,6 +17,7 @@ const AttendancePage = lazy(() => import('../pages/shared/AttendancePage'))
 const AssessmentsPage = lazy(() => import('../pages/shared/AssessmentsPage'))
 const ParentCommunicationPage = lazy(() => import('../pages/shared/ParentCommunicationPage'))
 const DirectoryPage = lazy(() => import('../pages/shared/DirectoryPage'))
+const ClassesPage = lazy(() => import('../pages/admin/ClassesPage'))
 const ProfilePage = lazy(() => import('../pages/shared/ProfilePage'))
 const AlertRulesPage = lazy(() => import('../pages/admin/AlertRulesPage'))
 const SettingsPage = lazy(() => import('../pages/admin/SettingsPage'))
@@ -51,7 +52,7 @@ const roleHome = {
 
 const routePages = {
   '/admin/teachers': [TeacherManagementPage],
-  '/admin/classes': [DirectoryPage, { kind: 'classes' }],
+  '/admin/classes': [ClassesPage],
   '/admin/learners': [DirectoryPage, { kind: 'learners' }],
   '/admin/parents': [ParentManagementPage],
   '/teacher/classes': [DirectoryPage, { kind: 'classes' }],
