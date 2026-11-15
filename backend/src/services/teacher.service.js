@@ -34,7 +34,7 @@ const createTemporaryPassword = () =>
 
 export const listTeachers = async (schoolId) =>
   prisma.schoolMembership.findMany({
-    where: { schoolId, role: "TEACHER" },
+    where: { schoolId, role: "TEACHER", isActive: true },
     include: teacherInclude,
     orderBy: { createdAt: "asc" },
   });
@@ -42,48 +42,129 @@ export const listTeachers = async (schoolId) =>
 export const createTeacher = async (schoolId, data) => {
   const email = data.email.trim().toLowerCase();
 
-  const existing = await prisma.user.findUnique({
+  const existingUser = await prisma.user.findUnique({
     where: { email },
-    select: { id: true },
+    select: {
+      ...safeUserSelect,
+      memberships: {
+        select: {
+          id: true,
+          schoolId: true,
+          role: true,
+          isActive: true,
+        },
+      },
+    },
   });
 
-  if (existing) {
-    throw makeError("A user with this email already exists.", 409);
+  let existingTeacherMembership = null;
+
+  if (existingUser) {
+    existingTeacherMembership = existingUser.memberships.find(
+      (membership) =>
+        membership.schoolId === schoolId && membership.role === "TEACHER"
+    );
+
+    if (existingTeacherMembership?.isActive) {
+      throw makeError(
+        "This teacher is already a member of this school.",
+        409
+      );
+    }
+
+    const incompatibleRoles = existingUser.memberships.filter(
+      (membership) =>
+        membership.role !== "TEACHER" && membership.role !== "SCHOOL_ADMIN"
+    );
+
+    if (incompatibleRoles.length > 0) {
+      throw makeError(
+        "An account with this email exists but has an incompatible role. Only TEACHER accounts can be linked to a school.",
+        409
+      );
+    }
+
+    const hasTeacherMembership = existingUser.memberships.some(
+      (membership) => membership.role === "TEACHER"
+    );
+
+    if (!hasTeacherMembership) {
+      throw makeError(
+        "An account with this email already exists but is not a teacher account.",
+        409
+      );
+    }
   }
 
-  const tempPassword = createTemporaryPassword();
-  const passwordHash = await hashPassword(tempPassword);
-
   try {
-    const result = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          firstName: data.firstName.trim(),
-          lastName: data.lastName.trim(),
-          email,
-          passwordHash,
-          mustChangePassword: true,
+    return await prisma.$transaction(async (tx) => {
+      if (!existingUser) {
+        const tempPassword = createTemporaryPassword();
+        const passwordHash = await hashPassword(tempPassword);
+
+        const user = await tx.user.create({
+          data: {
+            firstName: data.firstName.trim(),
+            lastName: data.lastName.trim(),
+            email,
+            passwordHash,
+            mustChangePassword: true,
+          },
+          select: safeUserSelect,
+        });
+
+        const membership = await tx.schoolMembership.create({
+          data: {
+            schoolId,
+            userId: user.id,
+            role: "TEACHER",
+          },
+          include: teacherInclude,
+        });
+
+        return {
+          user,
+          membership,
+          accountCreated: true,
+          tempPassword,
+        };
+      }
+
+      let membership;
+
+      if (existingTeacherMembership) {
+        // Reactivate the original membership in this school.
+        membership = await tx.schoolMembership.update({
+          where: { id: existingTeacherMembership.id },
+          data: { isActive: true },
+          include: teacherInclude,
+        });
+      } else {
+        // Enrol the existing teacher account in another school.
+        membership = await tx.schoolMembership.create({
+          data: {
+            schoolId,
+            userId: existingUser.id,
+            role: "TEACHER",
+          },
+          include: teacherInclude,
+        });
+      }
+
+      return {
+        user: {
+          id: existingUser.id,
+          firstName: existingUser.firstName,
+          lastName: existingUser.lastName,
+          email: existingUser.email,
+          phone: existingUser.phone,
+          isActive: existingUser.isActive,
+          mustChangePassword: existingUser.mustChangePassword,
         },
-        select: safeUserSelect,
-      });
-
-      const membership = await tx.schoolMembership.create({
-        data: {
-          schoolId,
-          userId: user.id,
-          role: "TEACHER",
-        },
-        include: teacherInclude,
-      });
-
-      return { user, membership };
-    });
-
-    return {
-      ...result,
-      accountCreated: true,
-      tempPassword,
-    };
+        membership,
+        accountCreated: false,
+      };
+    }, { timeout: 15000 });
   } catch (error) {
     if (error.code === "P2002") {
       throw makeError("A user with this email already exists.", 409);
@@ -94,7 +175,7 @@ export const createTeacher = async (schoolId, data) => {
 
 export const getTeacher = async (schoolId, membershipId) => {
   const membership = await prisma.schoolMembership.findFirst({
-    where: { id: membershipId, schoolId, role: "TEACHER" },
+    where: { id: membershipId, schoolId, role: "TEACHER", isActive: true },
     include: teacherInclude,
   });
 
@@ -107,7 +188,7 @@ export const getTeacher = async (schoolId, membershipId) => {
 
 export const updateTeacher = async (schoolId, membershipId, data) => {
   const membership = await prisma.schoolMembership.findFirst({
-    where: { id: membershipId, schoolId, role: "TEACHER" },
+    where: { id: membershipId, schoolId, role: "TEACHER", isActive: true },
     select: { id: true, userId: true },
   });
 
@@ -132,7 +213,7 @@ export const updateTeacher = async (schoolId, membershipId, data) => {
 
 export const removeTeacher = async (schoolId, membershipId) => {
   const membership = await prisma.schoolMembership.findFirst({
-    where: { id: membershipId, schoolId, role: "TEACHER" },
+    where: { id: membershipId, schoolId, role: "TEACHER", isActive: true },
     select: { id: true },
   });
 
@@ -140,9 +221,51 @@ export const removeTeacher = async (schoolId, membershipId) => {
     throw makeError("Teacher not found.", 404);
   }
 
-  await prisma.schoolMembership.delete({
-    where: { id: membershipId },
+  await prisma.$transaction([
+    prisma.classTeacher.deleteMany({
+      where: { schoolId, membershipId },
+    }),
+    prisma.schoolMembership.update({
+      where: { id: membershipId },
+      data: { isActive: false },
+    }),
+  ]);
+};
+
+export const resetTeacherPassword = async (schoolId, membershipId) => {
+  // Verify the membership belongs to a TEACHER in the specified school
+  const membership = await prisma.schoolMembership.findFirst({
+    where: { id: membershipId, schoolId, role: "TEACHER", isActive: true },
+    include: {
+      user: {
+        select: {
+          id: true,
+          email: true,
+          mustChangePassword: true,
+        },
+      },
+    },
   });
+
+  if (!membership) {
+    throw makeError("Teacher not found.", 404);
+  }
+
+  // Generate a cryptographically secure temporary password
+  const tempPassword = createTemporaryPassword();
+  const passwordHash = await hashPassword(tempPassword);
+
+  // Update the teacher's existing User record: passwordHash and mustChangePassword=true
+  await prisma.user.update({
+    where: { id: membership.userId },
+    data: {
+      passwordHash,
+      mustChangePassword: true,
+    },
+  });
+
+  // Return the temporary password only in the response to this authorized request
+  return { tempPassword };
 };
 
 export const assignTeacherToClass = async (
@@ -160,7 +283,7 @@ export const assignTeacherToClass = async (
   }
 
   const teacher = await prisma.schoolMembership.findFirst({
-    where: { id: membershipId, schoolId, role: "TEACHER" },
+    where: { id: membershipId, schoolId, role: "TEACHER", isActive: true },
     select: { id: true },
   });
 

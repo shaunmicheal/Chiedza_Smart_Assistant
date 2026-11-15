@@ -82,7 +82,7 @@ export const createParent = async (schoolId, data) => {
     where: { email },
     include: {
       memberships: {
-        where: { schoolId },
+        where: { schoolId, isActive: true },
         select: { id: true, role: true },
       },
       parentLinks: {

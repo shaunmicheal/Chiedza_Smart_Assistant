@@ -2,7 +2,7 @@ import prisma from "../config/prisma.js";
 
 export const listSchoolsForUser = async (userId) => {
   const memberships = await prisma.schoolMembership.findMany({
-    where: { userId },
+    where: { userId, isActive: true },
     include: {
       school: true,
     },

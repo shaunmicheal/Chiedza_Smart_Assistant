@@ -35,6 +35,16 @@ export const removeTeacher = async (req, res, next) => {
   } catch (error) { next(error); }
 };
 
+export const resetTeacherPassword = async (req, res, next) => {
+  try {
+    const result = await teacherService.resetTeacherPassword(
+      req.params.schoolId,
+      req.params.membershipId
+    );
+    res.status(200).json({ success: true, data: result });
+  } catch (error) { next(error); }
+};
+
 export const assignTeacherToClass = async (req, res, next) => {
   try {
     const data = await teacherService.assignTeacherToClass(

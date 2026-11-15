@@ -88,6 +88,7 @@ export const login = async ({ email, password }) => {
     where: { email },
     include: {
       memberships: {
+        where: { isActive: true },
         select: { id: true, schoolId: true, role: true },
       },
     },
@@ -133,6 +134,7 @@ export const getMe = async (userId) => {
       isActive: true,
       mustChangePassword: true,
       memberships: {
+        where: { isActive: true },
         select: { id: true, schoolId: true, role: true, createdAt: true },
       },
     },

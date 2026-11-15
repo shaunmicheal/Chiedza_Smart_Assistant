@@ -32,6 +32,7 @@ export const authenticate = async (req, res, next) => {
         isActive: true,
         mustChangePassword: true,
         memberships: {
+          where: { isActive: true },
           select: { id: true, schoolId: true, role: true, createdAt: true },
         },
       },

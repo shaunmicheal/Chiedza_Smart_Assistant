@@ -26,7 +26,7 @@ export const requireSchoolMembership = (req, res, next) => {
   }
 
   const membership = (req.memberships || []).find(
-    (m) => m.schoolId === schoolId
+    (m) => m.schoolId === schoolId && m.isActive !== false
   );
 
   if (!membership) {

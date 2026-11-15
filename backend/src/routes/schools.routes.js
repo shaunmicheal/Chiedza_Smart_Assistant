@@ -42,6 +42,8 @@ router.get("/:schoolId/teachers/:membershipId", validate(schoolAndIdParamSchema(
 router.patch("/:schoolId/teachers/:membershipId", validate(updateTeacherSchema), requireSchoolMembership, requireRole("SCHOOL_ADMIN"), teacherCtrl.updateTeacher);
 router.delete("/:schoolId/teachers/:membershipId", validate(schoolAndIdParamSchema("membershipId")), requireSchoolMembership, requireRole("SCHOOL_ADMIN"), teacherCtrl.removeTeacher);
 
+router.post("/:schoolId/teachers/:membershipId/reset-password", validate(schoolAndIdParamSchema("membershipId")), requireSchoolMembership, requireRole("SCHOOL_ADMIN"), teacherCtrl.resetTeacherPassword);
+
 router.get("/:schoolId/classes", validate(schoolIdParamSchema), requireSchoolMembership, requireClassAccess, classCtrl.listClasses);
 router.post("/:schoolId/classes", validate(createClassSchema), requireSchoolMembership, requireRole("SCHOOL_ADMIN"), classCtrl.createClass);
 router.get("/:schoolId/classes/:classId", validate(schoolAndIdParamSchema("classId")), requireSchoolMembership, requireClassAccess, classCtrl.getClass);
