@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   BookOpen,
   Copy,
+  CircleX,
   GraduationCap,
   RefreshCw,
   ShieldCheck,
@@ -15,6 +16,7 @@ import EmptyState from '../../components/common/EmptyState'
 import FormField from '../../components/common/FormField'
 import PageHeading from '../../components/common/PageHeading'
 import './TeacherManagementPage.css'
+import { useAutoDismiss } from '../../hooks/useAutoDismiss'
 
 const getList = (response, label) => {
   if (!response?.success || !Array.isArray(response.data)) {
@@ -41,6 +43,7 @@ function TeacherManagementPage() {
   const [error, setError] = useState('')
   const [formError, setFormError] = useState('')
   const [success, setSuccess] = useState('')
+  useAutoDismiss(success, setSuccess)
   const [showForm, setShowForm] = useState(false)
   const [credentials, setCredentials] = useState(null)
   const [copied, setCopied] = useState(false)
@@ -127,6 +130,81 @@ function TeacherManagementPage() {
     setShowForm(false)
   }
 
+  const handleResetPassword = async (teacher) => {
+    if (!teacher || !schoolId) return
+
+    const confirmed = window.confirm(
+      `Reset the password for ${getTeacherName(teacher)}?\n\nA new temporary password will be generated. Their current password will stop working.`
+    )
+
+    if (!confirmed) return
+
+    setError('')
+    setSuccess('')
+    setCredentials(null)
+
+    try {
+      const res = await apiRequest(
+        `/schools/${encodeURIComponent(schoolId)}/teachers/${encodeURIComponent(teacher.id)}/reset-password`,
+        {
+          method: 'POST',
+          auth: true,
+        }
+      )
+
+      if (!res.success || !res.data?.tempPassword) {
+        throw new Error(res.message || 'The server did not return a temporary password.')
+      }
+
+      setCredentials({
+        name: getTeacherName(teacher),
+        email: teacher.user?.email || '',
+        tempPassword: res.data.tempPassword,
+      })
+      setCopied(false)
+      setSuccess(`A new temporary password was generated for ${getTeacherName(teacher)}.`)
+    } catch (err) {
+      setError(err.message || 'Failed to reset password.')
+    }
+  }
+
+  const openResetPassword = (teacher) => {
+    handleResetPassword(teacher)
+  }
+
+  const handleRemoveTeacher = async (teacherId) => {
+    if (!teacherId || !schoolId || saving) return
+
+    const confirmed = window.confirm(
+      'Are you sure you want to remove this teacher from the school?\n\n' +
+      'This removes the teacher from this school but does not delete their account. ' +
+      'Historical attendance, assessment records, and other activity will be preserved.'
+    )
+
+    if (!confirmed) return
+
+    setSaving(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      await apiRequest(
+        `/schools/${encodeURIComponent(schoolId)}/teachers/${encodeURIComponent(teacherId)}`,
+        {
+          method: 'DELETE',
+          auth: true,
+        }
+      )
+
+      setSuccess('Teacher removed from school successfully.')
+      await loadData()
+    } catch (err) {
+      setError(err.message || 'Failed to remove teacher.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const createTeacher = async (event) => {
     event.preventDefault()
     setFormError('')
@@ -158,17 +236,22 @@ function TeacherManagementPage() {
         throw new Error('The server returned an invalid teacher creation response.')
       }
 
-      const { membership, tempPassword } = response.data
+      const { membership, tempPassword, accountCreated } = response.data
+      const teacherName = getTeacherName(membership)
 
       if (tempPassword) {
         setCredentials({
-          name: getTeacherName(membership),
+          name: teacherName,
           email: membership.user?.email || body.email,
           tempPassword,
         })
       }
 
-      setSuccess(`${getTeacherName(membership)} was added successfully.`)
+      setSuccess(
+        accountCreated
+          ? `${teacherName} was added successfully. A new account was created with a temporary password.`
+          : `${teacherName} was re-enrolled successfully. Their existing account and current password remain unchanged.`
+      )
       await loadData()
       resetForm()
     } catch (requestError) {
@@ -340,14 +423,15 @@ function TeacherManagementPage() {
         <section className="teacher-form-card" aria-labelledby="teacher-form-title">
           <div className="teacher-section-heading">
             <div>
-              <p className="eyebrow">New account</p>
-              <h2 id="teacher-form-title">Add a teacher</h2>
+              <p className="eyebrow">Teacher account</p>
+              <h2 id="teacher-form-title">Add or re-enrol a teacher</h2>
             </div>
           </div>
 
           <p className="teacher-guidance">
-            Chiedza will generate a temporary password. Give the credentials to
-            the teacher through a secure channel.
+            Enter the teacher's details. Chiedza creates a new account with a
+            temporary password, or re-enrols an existing teacher account without
+            changing their current password.
           </p>
 
           <form onSubmit={createTeacher}>
@@ -403,7 +487,7 @@ function TeacherManagementPage() {
                 className="learner-primary-button"
                 disabled={saving}
               >
-                {saving ? 'Creating account…' : 'Create teacher account'}
+                {saving ? 'Saving…' : 'Add or re-enrol teacher'}
               </button>
             </div>
           </form>
@@ -464,6 +548,7 @@ function TeacherManagementPage() {
         {teachers.length === 0 && !loading && (
           <p className="teacher-inline-note">Create a teacher account before assigning classes.</p>
         )}
+
         {classes.length === 0 && !loading && (
           <p className="teacher-inline-note">Create a class before assigning a teacher.</p>
         )}
@@ -537,6 +622,26 @@ function TeacherManagementPage() {
                             </span>
                           )
                         })}
+                      </div>
+                    )}
+
+                    {/* Reset Password and Remove from School actions */}
+                    {user.isActive && (
+                      <div className="teacher-card-actions">
+                        <button
+                          type="button"
+                          onClick={() => openResetPassword(teacher)}
+                          className="teacher-action-button"
+                        >
+                          <RefreshCw size={16} /> Reset Password
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveTeacher(teacher.id)}
+                          className="teacher-action-button teacher-action-button-danger"
+                        >
+                          <CircleX size={16} /> Remove from School
+                        </button>
                       </div>
                     )}
                   </div>

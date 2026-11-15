@@ -322,3 +322,49 @@
     width: 100%;
   }
 }
+
+.teacher-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.teacher-action-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid rgba(23, 77, 58, 0.12);
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--charcoal);
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.teacher-action-button:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.teacher-action-button-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid #efd2cc;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #963d32;
+  background: #fbefec;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.teacher-action-button-danger:hover {
+  border-color: #963d32;
+  background: #f5c9c1;
+}

@@ -15,8 +15,24 @@ export const clearStoredToken = () => {
 }
 
 export const apiRequest = async (path, options = {}) => {
-  const { auth = true, body, headers = {}, ...requestOptions } = options
+  const {
+    auth = true,
+    body,
+    headers = {},
+    query,
+    ...requestOptions
+  } = options
+
   const token = getStoredToken()
+  const requestUrl = new URL(`${API_BASE_URL}${path}`)
+
+  if (query && typeof query === 'object') {
+    Object.entries(query).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        requestUrl.searchParams.set(key, String(value))
+      }
+    })
+  }
 
   const requestHeaders = {
     Accept: 'application/json',
@@ -34,7 +50,7 @@ export const apiRequest = async (path, options = {}) => {
   let response
 
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
+    response = await fetch(requestUrl.toString(), {
       ...requestOptions,
       headers: requestHeaders,
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -52,7 +68,17 @@ export const apiRequest = async (path, options = {}) => {
     const error = new Error(
       result.message || result.error || `Request failed (${response.status}).`
     )
+
     error.status = response.status
+
+    if (auth && token && response.status === 401) {
+      clearStoredToken()
+
+      if (window.location.pathname !== '/login') {
+        window.location.replace('/login')
+      }
+    }
+
     throw error
   }
 

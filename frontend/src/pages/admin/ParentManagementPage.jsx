@@ -8,6 +8,7 @@ import PageHeading from '../../components/common/PageHeading'
 import Panel from '../../components/common/Panel'
 import '../parent/ParentPortal.css'
 import './ParentManagementPage.css'
+import { useAutoDismiss } from '../../hooks/useAutoDismiss'
 
 const getList = (response, label) => {
   if (!response?.success || !Array.isArray(response.data)) {
@@ -27,6 +28,7 @@ function ParentManagementPage() {
   const [error, setError] = useState('')
   const [formError, setFormError] = useState('')
   const [success, setSuccess] = useState('')
+  useAutoDismiss(success, setSuccess)
   const [showForm, setShowForm] = useState(false)
   const [createdCredentials, setCreatedCredentials] = useState(null)
   const [copied, setCopied] = useState(false)
