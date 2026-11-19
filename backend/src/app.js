@@ -14,6 +14,7 @@ import assessmentRoutes from "./routes/assessment.routes.js";
 import earlyWarningRoutes from "./routes/earlyWarning.routes.js";
 import draftRoutes from "./routes/draft.routes.js";
 import parentRoutes from "./routes/parent.routes.js";
+import parentInvitationRoutes from "./routes/parentInvitation.routes.js";
 import { notFound, errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
@@ -61,12 +62,14 @@ const createLimiter = (max) =>
 const authLimiter = createLimiter(100);
 const apiLimiter = createLimiter(300);
 const bootstrapLimiter = createLimiter(10);
+const activationLimiter = createLimiter(10);
 
 app.use("/api/health", healthRoutes);
 app.use("/api/auth", authLimiter, authRoutes);
 app.use("/api/bootstrap", bootstrapLimiter, bootstrapRoutes);
 app.use("/api/schools", apiLimiter, schoolsRoutes);
 app.use("/api/parent", apiLimiter, parentRoutes);
+app.use("/api/parent-invitations", activationLimiter, parentInvitationRoutes);
 app.use("/api/schools/:schoolId", apiLimiter, attendanceRoutes);
 app.use("/api/schools/:schoolId", apiLimiter, assessmentRoutes);
 app.use("/api/schools/:schoolId/early-warning", apiLimiter, earlyWarningRoutes);

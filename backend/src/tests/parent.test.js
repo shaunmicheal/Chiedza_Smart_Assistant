@@ -1,4 +1,5 @@
 import request from "supertest";
+import { createHash } from "node:crypto";
 import prisma from "../config/prisma.js";
 import { hashPassword } from "../utils/password.js";
 import app from "../server.js";
@@ -11,6 +12,9 @@ const EMAILS = {
   teacher: "parent-test-teacher@test.chiedza.local",
   parent1: "parent-one@test.chiedza.local",
   parent2: "parent-two@test.chiedza.local",
+  invitation1: "invited-parent-one@test.chiedza.local",
+  invitation2: "invited-parent-two@test.chiedza.local",
+  invitation3: "invited-parent-three@test.chiedza.local",
 };
 
 let school;
@@ -33,6 +37,10 @@ const cleanup = async () => {
 
   if (existingSchool) {
     await prisma.parentCommunicationDraft.deleteMany({
+      where: { schoolId: existingSchool.id },
+    });
+
+    await prisma.parentInvitation.deleteMany({
       where: { schoolId: existingSchool.id },
     });
 
@@ -69,10 +77,6 @@ const cleanup = async () => {
     });
 
     await prisma.schoolClass.deleteMany({
-      where: { schoolId: existingSchool.id },
-    });
-
-    await prisma.parentInvitation.deleteMany({
       where: { schoolId: existingSchool.id },
     });
 
@@ -492,5 +496,227 @@ describe("Parent portal data access", () => {
 
     expect(adminResponse.status).toBe(403);
     expect(teacherResponse.status).toBe(403);
+  });
+});
+
+
+describe("Parent invitation activation", () => {
+  let invitationCode;
+  let invitationId;
+
+  const createInvitation = (token, email, learnerId = learners[0].id) =>
+    request(app)
+      .post(`/api/schools/${school.id}/parent-invitations`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ email, learnerId });
+
+  const activateInvitation = (email, code) =>
+    request(app)
+      .post("/api/parent-invitations/activate")
+      .send({
+        firstName: "Invited",
+        lastName: "Guardian",
+        email,
+        invitationCode: code,
+        password: "SecureParentPass123!",
+      });
+
+  it("prevents teachers from issuing parent invitations", async () => {
+    const response = await createInvitation(
+      teacherToken,
+      EMAILS.invitation1
+    );
+
+    expect(response.status).toBe(403);
+  });
+
+  it("allows an administrator to issue an invitation and stores only its hash", async () => {
+    const response = await createInvitation(
+      adminToken,
+      EMAILS.invitation1
+    );
+
+    expect(response.status).toBe(201);
+    expect(response.body.success).toBe(true);
+    expect(response.body.data.invitation.invitedEmail).toBe(
+      EMAILS.invitation1
+    );
+    expect(response.body.data.invitation.status).toBe("PENDING");
+
+    invitationCode = response.body.data.invitationCode;
+    invitationId = response.body.data.invitation.id;
+
+    expect(invitationCode).toBeTruthy();
+    expect(response.body.data.invitation.tokenHash).toBeUndefined();
+
+    const storedInvitation = await prisma.parentInvitation.findUnique({
+      where: { id: invitationId },
+    });
+
+    expect(storedInvitation.tokenHash).toBe(
+      createHash("sha256").update(invitationCode).digest("hex")
+    );
+    expect(storedInvitation.tokenHash).not.toBe(invitationCode);
+
+    const validity = storedInvitation.expiresAt.getTime() - Date.now();
+    expect(validity).toBeGreaterThan(47 * 60 * 60 * 1000);
+    expect(validity).toBeLessThanOrEqual(48 * 60 * 60 * 1000);
+  });
+
+  it("lists invitations without exposing token hashes", async () => {
+    const response = await request(app)
+      .get(`/api/schools/${school.id}/parent-invitations`)
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(response.status).toBe(200);
+
+    const listed = response.body.data.find(
+      (item) => item.id === invitationId
+    );
+
+    expect(listed).toBeTruthy();
+    expect(listed.invitedEmail).toBe(EMAILS.invitation1);
+    expect(listed.tokenHash).toBeUndefined();
+  });
+
+  it("rejects an invitation used with the wrong email", async () => {
+    const response = await activateInvitation(
+      EMAILS.invitation2,
+      invitationCode
+    );
+
+    expect(response.status).toBe(403);
+  });
+
+  it("activates the invited parent and creates a verified learner link", async () => {
+    const response = await activateInvitation(
+      EMAILS.invitation1,
+      invitationCode
+    );
+
+    expect(response.status).toBe(201);
+    expect(response.body.success).toBe(true);
+    expect(response.body.data.email).toBe(EMAILS.invitation1);
+    expect(response.body.data.mustChangePassword).toBe(false);
+    expect(response.body.data.passwordHash).toBeUndefined();
+
+    const membership = await prisma.schoolMembership.findFirst({
+      where: {
+        schoolId: school.id,
+        userId: response.body.data.id,
+        role: "PARENT",
+        isActive: true,
+      },
+    });
+
+    expect(membership).toBeTruthy();
+
+    const link = await prisma.parentLearner.findFirst({
+      where: {
+        learnerId: learners[0].id,
+        guardianUserId: response.body.data.id,
+      },
+    });
+
+    expect(link).toBeTruthy();
+    expect(link.status).toBe("VERIFIED");
+    expect(link.relationship).toBe("Parent");
+    expect(link.verifiedAt).toBeTruthy();
+
+    const storedInvitation = await prisma.parentInvitation.findUnique({
+      where: { id: invitationId },
+    });
+
+    expect(storedInvitation.status).toBe("ACCEPTED");
+    expect(storedInvitation.acceptedAt).toBeTruthy();
+
+    const token = await login(
+      EMAILS.invitation1,
+      "SecureParentPass123!"
+    );
+
+    const children = await request(app)
+      .get("/api/parent/children")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(children.status).toBe(200);
+    expect(children.body.data).toHaveLength(1);
+    expect(children.body.data[0].learnerId).toBe(learners[0].id);
+  });
+
+  it("rejects reuse of an accepted invitation", async () => {
+    const response = await activateInvitation(
+      EMAILS.invitation1,
+      invitationCode
+    );
+
+    expect(response.status).toBe(409);
+  });
+
+  it("rejects an invalid invitation code", async () => {
+    const response = await activateInvitation(
+      EMAILS.invitation2,
+      "invalid-invitation-code-that-is-long-enough"
+    );
+
+    expect(response.status).toBe(400);
+  });
+
+  it("allows an administrator to revoke a pending invitation", async () => {
+    const created = await createInvitation(
+      adminToken,
+      EMAILS.invitation2,
+      learners[1].id
+    );
+
+    expect(created.status).toBe(201);
+
+    const id = created.body.data.invitation.id;
+    const code = created.body.data.invitationCode;
+
+    const revoked = await request(app)
+      .delete(`/api/schools/${school.id}/parent-invitations/${id}`)
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(revoked.status).toBe(200);
+    expect(revoked.body.data.status).toBe("REVOKED");
+
+    const activation = await activateInvitation(
+      EMAILS.invitation2,
+      code
+    );
+
+    expect(activation.status).toBe(409);
+  });
+
+  it("marks an expired invitation as expired and rejects activation", async () => {
+    const created = await createInvitation(
+      adminToken,
+      EMAILS.invitation3,
+      learners[2].id
+    );
+
+    expect(created.status).toBe(201);
+
+    const id = created.body.data.invitation.id;
+    const code = created.body.data.invitationCode;
+
+    await prisma.parentInvitation.update({
+      where: { id },
+      data: { expiresAt: new Date(Date.now() - 60 * 1000) },
+    });
+
+    const activation = await activateInvitation(
+      EMAILS.invitation3,
+      code
+    );
+
+    expect(activation.status).toBe(410);
+
+    const stored = await prisma.parentInvitation.findUnique({
+      where: { id },
+    });
+
+    expect(stored.status).toBe("EXPIRED");
   });
 });

@@ -17,9 +17,6 @@ function AuthFrame({ eyebrow, title, description, children }) {
         <h1>{title}</h1>
         <p className="auth-description">{description}</p>
         {children}
-        <p className="auth-demo-note">
-          Frontend demonstration only. Authentication and account activation are not connected to a service.
-        </p>
       </section>
       <footer className="auth-footer">Chiedza Smart Assistant · Supporting learners together</footer>
     </main>

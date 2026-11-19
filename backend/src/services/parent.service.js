@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import prisma from "../config/prisma.js";
 import { hashPassword } from "../utils/password.js";
 
@@ -306,4 +306,276 @@ export const listMyMessages = async (guardianUserId) => {
     },
     orderBy: { approvedAt: "desc" },
   });
+};
+
+const hashInvitationCode = (code) =>
+  createHash("sha256").update(code).digest("hex");
+
+const INVITATION_VALIDITY_MS = 48 * 60 * 60 * 1000;
+
+export const createParentInvitation = async (
+  schoolId,
+  invitedByMembershipId,
+  data
+) => {
+  const email = data.email.trim().toLowerCase();
+
+  const learner = await prisma.learner.findFirst({
+    where: {
+      id: data.learnerId,
+      schoolId,
+      isActive: true,
+    },
+    select: { id: true },
+  });
+
+  if (!learner) {
+    throw makeError("Active learner not found in this school.", 404);
+  }
+
+  const existingUser = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true },
+  });
+
+  if (existingUser) {
+    throw makeError(
+      "An account already uses this email. Use Add Parent to link an existing parent account instead.",
+      409
+    );
+  }
+
+  const invitationCode = randomBytes(24).toString("base64url");
+  const tokenHash = hashInvitationCode(invitationCode);
+  const expiresAt = new Date(Date.now() + INVITATION_VALIDITY_MS);
+
+  const invitation = await prisma.parentInvitation.create({
+    data: {
+      schoolId,
+      learnerId: learner.id,
+      invitedByMembershipId,
+      invitedEmail: email,
+      tokenHash,
+      expiresAt,
+      status: "PENDING",
+    },
+    select: {
+      id: true,
+      invitedEmail: true,
+      status: true,
+      expiresAt: true,
+      createdAt: true,
+      learner: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+        },
+      },
+    },
+  });
+
+  // The plaintext code is returned only at creation and is never stored.
+  return { invitation, invitationCode };
+};
+
+export const listParentInvitations = async (schoolId) => {
+  const now = new Date();
+
+  await prisma.parentInvitation.updateMany({
+    where: {
+      schoolId,
+      status: "PENDING",
+      expiresAt: { lte: now },
+    },
+    data: { status: "EXPIRED" },
+  });
+
+  return prisma.parentInvitation.findMany({
+    where: { schoolId },
+    select: {
+      id: true,
+      invitedEmail: true,
+      status: true,
+      expiresAt: true,
+      acceptedAt: true,
+      createdAt: true,
+      learner: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+        },
+      },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+};
+
+export const revokeParentInvitation = async (schoolId, invitationId) => {
+  const invitation = await prisma.parentInvitation.findFirst({
+    where: {
+      id: invitationId,
+      schoolId,
+    },
+    select: {
+      id: true,
+      status: true,
+      expiresAt: true,
+    },
+  });
+
+  if (!invitation) {
+    throw makeError("Invitation not found.", 404);
+  }
+
+  if (invitation.status !== "PENDING" || invitation.expiresAt <= new Date()) {
+    throw makeError("Only a pending, unexpired invitation can be revoked.", 409);
+  }
+
+  const result = await prisma.parentInvitation.updateMany({
+    where: {
+      id: invitationId,
+      schoolId,
+      status: "PENDING",
+      expiresAt: { gt: new Date() },
+    },
+    data: { status: "REVOKED" },
+  });
+
+  if (result.count !== 1) {
+    throw makeError("This invitation is no longer available to revoke.", 409);
+  }
+
+  return { id: invitationId, status: "REVOKED" };
+};
+
+export const activateParentInvitation = async (data) => {
+  const email = data.email.trim().toLowerCase();
+  const invitationCode = data.invitationCode.trim();
+  const tokenHash = hashInvitationCode(invitationCode);
+  const now = new Date();
+
+  const invitation = await prisma.parentInvitation.findUnique({
+    where: { tokenHash },
+    select: {
+      id: true,
+      schoolId: true,
+      learnerId: true,
+      invitedEmail: true,
+      status: true,
+      expiresAt: true,
+    },
+  });
+
+  if (!invitation) {
+    throw makeError("The invitation code is invalid.", 400);
+  }
+
+  if (invitation.status !== "PENDING") {
+    throw makeError("This invitation has already been used or is no longer active.", 409);
+  }
+
+  if (invitation.expiresAt <= now) {
+    await prisma.parentInvitation.updateMany({
+      where: { id: invitation.id, status: "PENDING" },
+      data: { status: "EXPIRED" },
+    });
+    throw makeError("This invitation has expired. Please contact your school.", 410);
+  }
+
+  if (!invitation.invitedEmail || invitation.invitedEmail !== email) {
+    throw makeError("The email address does not match this invitation.", 403);
+  }
+
+  const existingUser = await prisma.user.findUnique({
+    where: { email },
+    select: { id: true },
+  });
+
+  if (existingUser) {
+    throw makeError(
+      "An account already exists for this email. Please contact your school administrator.",
+      409
+    );
+  }
+
+  const passwordHash = await hashPassword(data.password);
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      // Claim the invitation first. A concurrent activation can claim it only once.
+      const claimed = await tx.parentInvitation.updateMany({
+        where: {
+          id: invitation.id,
+          status: "PENDING",
+          expiresAt: { gt: now },
+          invitedEmail: email,
+        },
+        data: {
+          status: "ACCEPTED",
+          acceptedAt: now,
+        },
+      });
+
+      if (claimed.count !== 1) {
+        throw makeError("This invitation is no longer available.", 409);
+      }
+
+      const learner = await tx.learner.findFirst({
+        where: {
+          id: invitation.learnerId,
+          schoolId: invitation.schoolId,
+          isActive: true,
+        },
+        select: { id: true },
+      });
+
+      if (!learner) {
+        throw makeError("The learner linked to this invitation is no longer active.", 409);
+      }
+
+      const user = await tx.user.create({
+        data: {
+          firstName: data.firstName.trim(),
+          lastName: data.lastName.trim(),
+          email,
+          passwordHash,
+          mustChangePassword: false,
+        },
+        select: safeUserSelect,
+      });
+
+      await tx.schoolMembership.create({
+        data: {
+          schoolId: invitation.schoolId,
+          userId: user.id,
+          role: "PARENT",
+        },
+      });
+
+      await tx.parentLearner.create({
+        data: {
+          learnerId: invitation.learnerId,
+          guardianUserId: user.id,
+          relationship: "Parent",
+          status: "VERIFIED",
+          verifiedAt: now,
+        },
+      });
+
+      return user;
+    });
+
+    return result;
+  } catch (error) {
+    if (error.code === "P2002") {
+      throw makeError(
+        "An account or parent link already exists for this email. Please contact your school.",
+        409
+      );
+    }
+
+    throw error;
+  }
 };

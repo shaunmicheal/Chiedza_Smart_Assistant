@@ -8,7 +8,7 @@ It brings school records and parent communication into one role-based applicatio
 
 The project is being developed as a startup concept with a proposed local school pilot. The current application includes administrator, teacher and parent workspaces.
 
-The parent portal displays linked learners, attendance, assessment results and approved school messages. A separate automated notification service and WhatsApp integration are not currently implemented.
+The parent portal displays linked learners, attendance, assessment results and approved school messages. Parent onboarding supports administrator-created accounts with temporary credentials and one-time invitation codes that parents can use to activate their own accounts. Invitation codes must be shared manually by an administrator; automatic email delivery is not implemented. A separate automated notification service and WhatsApp integration are also not currently implemented.
 
 ## Main capabilities
 
@@ -20,6 +20,7 @@ The parent portal displays linked learners, attendance, assessment results and a
 - Early-warning rules and alerts for repeated absences and academic decline.
 - English and Shona parent communication drafts, with staff approval.
 - Parent portal restricted to verified links with active learners.
+- Parent onboarding through administrator-created accounts or one-time invitation-code activation.
 - Parent access to approved messages only.
 
 ## Technology

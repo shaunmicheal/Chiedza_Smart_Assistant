@@ -13,11 +13,12 @@
 7. [Assessments](#assessments)
 8. [Early-Warning Rules & Alerts](#early-warning-rules--alerts)
 9. [Parent Communication Drafts](#parent-communication-drafts)
-10. [Parent Portal](#parent-portal)
-11. [Error Response Format](#error-response-format)
-12. [Role Permissions](#role-permissions)
-13. [Environment Variables](#environment-variables)
-14. [Integration Limitations](#backend-integration-limitations)
+10. [Parent Invitations](#parent-invitations)
+11. [Parent Portal](#parent-portal)
+12. [Error Response Format](#error-response-format)
+13. [Role Permissions](#role-permissions)
+14. [Environment Variables](#environment-variables)
+15. [Integration Limitations](#backend-integration-limitations)
 
 ---
 
@@ -453,6 +454,45 @@ Deletes an alert rule.
 ```
 
 ---
+
+## Parent Invitations
+
+Parent onboarding supports two methods:
+
+- **Administrator-created account:** A school administrator creates a parent account and receives temporary credentials to share securely. The parent must complete the required password change before accessing the portal. Administrators can also link additional learners to an existing parent account.
+- **Invitation activation:** A school administrator issues an invitation for a learner and an email address. The administrator shares the one-time invitation code with the parent outside the application. The parent uses the invited email, personal details, code and chosen password to activate the account.
+
+### POST /api/schools/:schoolId/parent-invitations
+
+**Authentication:** Required. Active school membership and the `SCHOOL_ADMIN` role are required.
+
+**Request body:** `email` and `learnerId`.
+
+Creates an invitation for the specified learner and parent email address. The response includes the invitation and the one-time `invitationCode`. The code is shown only when created; the database stores its SHA-256 hash rather than the plaintext code. Invitations expire after 48 hours.
+
+### GET /api/schools/:schoolId/parent-invitations
+
+**Authentication:** Required. Active school membership and the `SCHOOL_ADMIN` role are required.
+
+Lists invitations for the school. Responses do not expose invitation hashes or plaintext codes. Pending invitations that have passed their expiry time are marked `EXPIRED` when the list is retrieved.
+
+### DELETE /api/schools/:schoolId/parent-invitations/:invitationId
+
+**Authentication:** Required. Active school membership and the `SCHOOL_ADMIN` role are required.
+
+Revokes a pending invitation. Accepted, expired or already revoked invitations cannot be revoked as pending invitations.
+
+### POST /api/parent-invitations/activate
+
+**Authentication:** Not required. The endpoint is protected by an IP-based rate limit of 10 requests per 15 minutes.
+
+**Request body:** `firstName`, `lastName`, `email`, `invitationCode` and `password`.
+
+The supplied email must match the invited email address. The invitation must be pending and unexpired, and the email must not already belong to an account. Successful activation creates the user, parent school membership and verified learner-parent link in a database transaction. The invitation is accepted as part of that transaction.
+
+Invitation statuses are `PENDING`, `ACCEPTED`, `EXPIRED` and `REVOKED`.
+
+**Delivery limitation:** Invitation codes are not emailed automatically. The administrator must share the code with the invited parent through a suitable channel outside the application.
 
 ## Parent Portal
 

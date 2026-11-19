@@ -53,3 +53,51 @@ export const listMyMessages = async (req, res, next) => {
     next(error);
   }
 };
+
+
+export const createInvitation = async (req, res, next) => {
+  try {
+    const data = await parentService.createParentInvitation(
+      req.params.schoolId,
+      req.membership.id,
+      req.body
+    );
+    res.status(201).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const listInvitations = async (req, res, next) => {
+  try {
+    const data = await parentService.listParentInvitations(req.params.schoolId);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const revokeInvitation = async (req, res, next) => {
+  try {
+    const data = await parentService.revokeParentInvitation(
+      req.params.schoolId,
+      req.params.invitationId
+    );
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const activateParentInvitation = async (req, res, next) => {
+  try {
+    const data = await parentService.activateParentInvitation(req.body);
+    res.status(201).json({
+      success: true,
+      message: "Your parent account has been activated. You can now sign in.",
+      data,
+    });
+  } catch (error) {
+    next(error);
+  }
+};

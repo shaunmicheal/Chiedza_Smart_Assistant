@@ -16,6 +16,8 @@ import {
   assignTeacherToClassSchema,
   removeTeacherFromClassSchema,
   createParentSchema,
+  createParentInvitationSchema,
+  parentInvitationParamSchema,
   updateTeacherSchema,
   createClassSchema,
   updateClassSchema,
@@ -35,6 +37,29 @@ router.patch("/:schoolId", validate(updateSchoolSchema), requireSchoolMembership
 
 router.get("/:schoolId/parents", validate(schoolIdParamSchema), requireSchoolMembership, requireRole("SCHOOL_ADMIN"), parentCtrl.listParents);
 router.post("/:schoolId/parents", validate(createParentSchema), requireSchoolMembership, requireRole("SCHOOL_ADMIN"), parentCtrl.createParent);
+
+router.get(
+  "/:schoolId/parent-invitations",
+  validate(schoolIdParamSchema),
+  requireSchoolMembership,
+  requireRole("SCHOOL_ADMIN"),
+  parentCtrl.listInvitations
+);
+router.post(
+  "/:schoolId/parent-invitations",
+  validate(createParentInvitationSchema),
+  requireSchoolMembership,
+  requireRole("SCHOOL_ADMIN"),
+  parentCtrl.createInvitation
+);
+router.delete(
+  "/:schoolId/parent-invitations/:invitationId",
+  validate(parentInvitationParamSchema),
+  requireSchoolMembership,
+  requireRole("SCHOOL_ADMIN"),
+  parentCtrl.revokeInvitation
+);
+
 
 router.get("/:schoolId/teachers", validate(schoolIdParamSchema), requireSchoolMembership, teacherCtrl.listTeachers);
 router.post("/:schoolId/teachers", validate(createTeacherSchema), requireSchoolMembership, requireRole("SCHOOL_ADMIN"), teacherCtrl.createTeacher);

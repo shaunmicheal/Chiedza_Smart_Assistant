@@ -145,3 +145,29 @@ export const listAttendanceQuerySchema = z.object({
     learnerId: idParam.optional(),
   }),
 });
+
+
+export const createParentInvitationSchema = z.object({
+  params: z.object({ schoolId: idParam }),
+  body: z.object({
+    email: z.string().trim().email().max(254),
+    learnerId: idParam,
+  }),
+});
+
+export const parentInvitationParamSchema = z.object({
+  params: z.object({
+    schoolId: idParam,
+    invitationId: idParam,
+  }),
+});
+
+export const activateParentInvitationSchema = z.object({
+  body: z.object({
+    firstName: z.string().trim().min(1).max(60),
+    lastName: z.string().trim().min(1).max(60),
+    email: z.string().trim().email().max(254),
+    invitationCode: z.string().trim().min(20).max(200),
+    password: z.string().min(8).max(128),
+  }),
+});
