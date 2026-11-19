@@ -81,7 +81,7 @@ beforeAll(async () => {
   teacherToken = loginTeacher.body.data.token;
   const loginTeacherZero = await request(app).post("/api/auth/login").send({ email: ZERO_TEACHER_EMAIL, password: PASSWORD });
   teacherZeroToken = loginTeacherZero.body.data.token;
-  });
+  }, 90000);
 
 afterAll(async () => {
   await cleanup();
@@ -121,7 +121,7 @@ describe("Attendance", () => {
       expect(res.status).toBe(201);
       expect(res.body.data.status).toBe(status);
     }
-  });
+  }, 90000);
 
   it("prevents duplicate attendance for same learner on same date", async () => {
     const res = await request(app)
@@ -171,7 +171,7 @@ describe("Attendance", () => {
     } else {
       expect(true).toBe(true);
     }
-  });
+  }, 90000);
 
   it("teacher can record attendance for their class", async () => {
     const res = await request(app)

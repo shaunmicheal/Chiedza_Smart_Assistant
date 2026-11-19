@@ -242,4 +242,57 @@ describe("Learner class access", () => {
 
     expect(res.status).toBe(403);
   });
+
+  it("allows a teacher to update a learner name and date of birth in their assigned class", async () => {
+    const res = await request(app)
+      .patch(`/api/schools/${school.id}/learners/${learner2.id}`)
+      .set("Authorization", `Bearer ${teacherToken}`)
+      .send({
+        firstName: "Robert",
+        lastName: "Ncube",
+        dateOfBirth: "2018-05-12",
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.firstName).toBe("Robert");
+    expect(res.body.data.lastName).toBe("Ncube");
+    expect(new Date(res.body.data.dateOfBirth).toISOString().slice(0, 10))
+      .toBe("2018-05-12");
+  });
+
+  it("blocks a teacher from updating a learner outside their class when body classId is changed", async () => {
+    const res = await request(app)
+      .patch(`/api/schools/${school.id}/learners/${learner1.id}`)
+      .set("Authorization", `Bearer ${teacherToken}`)
+      .send({
+        firstName: "Unauthorised Change",
+        classId: class2.id,
+      });
+
+    expect(res.status).toBe(403);
+  });
+
+  it("prevents a teacher from changing a learner admission number", async () => {
+    const res = await request(app)
+      .patch(`/api/schools/${school.id}/learners/${learner2.id}`)
+      .set("Authorization", `Bearer ${teacherToken}`)
+      .send({
+        admissionNumber: "CHANGED-001",
+      });
+
+    expect(res.status).toBe(403);
+  });
+
+  it("allows a school admin to update a learner admission number", async () => {
+    const res = await request(app)
+      .patch(`/api/schools/${school.id}/learners/${learner1.id}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        admissionNumber: "L-001-UPDATED",
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.admissionNumber).toBe("L-001-UPDATED");
+  });
+
 });

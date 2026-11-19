@@ -14,6 +14,7 @@ import EmptyState from '../../components/common/EmptyState'
 import FormField from '../../components/common/FormField'
 import PageHeading from '../../components/common/PageHeading'
 import '../shared/LearnerDirectory.css'
+import { useAutoDismiss } from '../../hooks/useAutoDismiss'
 
 function ClassesPage() {
   const { activeMembership } = useAuth()
@@ -25,6 +26,7 @@ function ClassesPage() {
   const [error, setError] = useState('')
   const [formError, setFormError] = useState('')
   const [success, setSuccess] = useState('')
+  useAutoDismiss(success, setSuccess)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({
     name: '',

@@ -218,6 +218,73 @@ describe("Auth", () => {
     expect(allowedRes.body.data.role).toBe("TEACHER");
   });
 
+  it("authenticated user can update their own profile", async () => {
+    const loginRes = await request(app).post("/api/auth/login").send({
+      email: TEACHER_EMAIL,
+      password: PASSWORD,
+    });
+
+    const token = loginRes.body.data.token;
+
+    const updateRes = await request(app)
+      .patch("/api/auth/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        firstName: "Updated",
+        lastName: "Teacher",
+        phone: "+263771234567",
+      });
+
+    expect(updateRes.status).toBe(200);
+    expect(updateRes.body.data.firstName).toBe("Updated");
+    expect(updateRes.body.data.lastName).toBe("Teacher");
+    expect(updateRes.body.data.phone).toBe("+263771234567");
+    expect(updateRes.body.data.email).toBe(TEACHER_EMAIL);
+
+    const meRes = await request(app)
+      .get("/api/auth/me")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(meRes.status).toBe(200);
+    expect(meRes.body.data.firstName).toBe("Updated");
+    expect(meRes.body.data.phone).toBe("+263771234567");
+  });
+
+  it("profile update does not allow changing email or account role", async () => {
+    const loginRes = await request(app).post("/api/auth/login").send({
+      email: TEACHER_EMAIL,
+      password: PASSWORD,
+    });
+
+    const token = loginRes.body.data.token;
+
+    const updateRes = await request(app)
+      .patch("/api/auth/profile")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        firstName: "Safe",
+        email: "changed@example.com",
+        role: "SCHOOL_ADMIN",
+      });
+
+    expect(updateRes.status).toBe(200);
+    expect(updateRes.body.data.email).toBe(TEACHER_EMAIL);
+
+    const meRes = await request(app)
+      .get("/api/auth/me")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(meRes.body.data.email).toBe(TEACHER_EMAIL);
+  });
+
+  it("profile update requires authentication", async () => {
+    const response = await request(app)
+      .patch("/api/auth/profile")
+      .send({ firstName: "Unauthorised" });
+
+    expect(response.status).toBe(401);
+  });
+
   it("logout clears session cookie", async () => {
     const loginRes = await request(app).post("/api/auth/login").send({
       email: ADMIN_EMAIL,

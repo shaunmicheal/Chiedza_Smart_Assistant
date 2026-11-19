@@ -35,3 +35,18 @@ export const passwordChangeSchema = z.object({
     path: ["confirmPassword"],
   }),
 });
+
+
+export const updateProfileSchema = z.object({
+  body: z.object({
+    firstName: z.string().trim().min(1).max(60).optional(),
+    lastName: z.string().trim().min(1).max(60).optional(),
+    phone: z.string().trim().max(30).nullable().optional(),
+  }).refine(
+    (data) =>
+      data.firstName !== undefined ||
+      data.lastName !== undefined ||
+      data.phone !== undefined,
+    { message: "Provide at least one profile field to update." }
+  ),
+});

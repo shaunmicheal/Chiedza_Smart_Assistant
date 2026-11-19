@@ -3,6 +3,7 @@ import {
   AlertCircle,
   CheckCircle2,
   GraduationCap,
+  Pencil,
   Plus,
   RefreshCw,
   Search,
@@ -15,6 +16,7 @@ import EmptyState from '../../components/common/EmptyState'
 import FormField from '../../components/common/FormField'
 import PageHeading from '../../components/common/PageHeading'
 import './LearnerDirectory.css'
+import { useAutoDismiss } from '../../hooks/useAutoDismiss'
 
 const getList = (response, label) => {
   if (!response?.success || !Array.isArray(response.data)) {
@@ -37,6 +39,15 @@ const formatDate = (value) => {
   }).format(date)
 }
 
+const toDateInput = (value) => {
+  if (!value) return ''
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+
+  return date.toISOString().slice(0, 10)
+}
+
 function LearnerDirectory({ role }) {
   const { activeMembership } = useAuth()
   const schoolId = activeMembership?.schoolId
@@ -49,6 +60,8 @@ function LearnerDirectory({ role }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  useAutoDismiss(success, setSuccess)
+
   const [showForm, setShowForm] = useState(false)
   const [formError, setFormError] = useState('')
   const [form, setForm] = useState({
@@ -58,6 +71,16 @@ function LearnerDirectory({ role }) {
     classId: '',
     dateOfBirth: '',
   })
+
+  const [editingLearner, setEditingLearner] = useState(null)
+  const [editForm, setEditForm] = useState({
+    firstName: '',
+    lastName: '',
+    admissionNumber: '',
+    classId: '',
+    dateOfBirth: '',
+  })
+  const [editError, setEditError] = useState('')
 
   const loadDirectory = useCallback(async () => {
     if (!schoolId) {
@@ -120,6 +143,11 @@ function LearnerDirectory({ role }) {
     setForm((current) => ({ ...current, [name]: value }))
   }
 
+  const updateEditField = (event) => {
+    const { name, value } = event.target
+    setEditForm((current) => ({ ...current, [name]: value }))
+  }
+
   const resetForm = () => {
     setForm({
       firstName: '',
@@ -130,6 +158,27 @@ function LearnerDirectory({ role }) {
     })
     setFormError('')
     setShowForm(false)
+  }
+
+  const openEditForm = (learner) => {
+    setShowForm(false)
+    setFormError('')
+    setSuccess('')
+    setEditError('')
+    setEditingLearner(learner)
+
+    setEditForm({
+      firstName: learner.firstName || '',
+      lastName: learner.lastName || '',
+      admissionNumber: learner.admissionNumber || '',
+      classId: learner.classId || '',
+      dateOfBirth: toDateInput(learner.dateOfBirth),
+    })
+  }
+
+  const closeEditForm = () => {
+    setEditingLearner(null)
+    setEditError('')
   }
 
   const handleRegister = async (event) => {
@@ -178,6 +227,68 @@ function LearnerDirectory({ role }) {
     }
   }
 
+  const handleUpdateLearner = async (event) => {
+    event.preventDefault()
+    setEditError('')
+    setSuccess('')
+
+    if (!schoolId || !editingLearner) {
+      setEditError('The learner record could not be identified. Please refresh the page.')
+      return
+    }
+
+    if (!editForm.firstName.trim() || !editForm.lastName.trim()) {
+      setEditError('First name and last name are required.')
+      return
+    }
+
+    setSaving(true)
+
+    try {
+      const body = {
+        firstName: editForm.firstName.trim(),
+        lastName: editForm.lastName.trim(),
+        dateOfBirth: editForm.dateOfBirth || null,
+      }
+
+      if (isAdmin) {
+        if (!editForm.admissionNumber.trim()) {
+          setEditError('Admission number is required.')
+          setSaving(false)
+          return
+        }
+
+        if (!editForm.classId) {
+          setEditError('Please select a class for this learner.')
+          setSaving(false)
+          return
+        }
+
+        body.admissionNumber = editForm.admissionNumber.trim()
+        body.classId = editForm.classId
+      }
+
+      await apiRequest(
+        `/schools/${encodeURIComponent(schoolId)}/learners/${encodeURIComponent(editingLearner.id)}`,
+        {
+          method: 'PATCH',
+          body,
+        }
+      )
+
+      const learnerName = `${body.firstName} ${body.lastName}`
+      await loadDirectory()
+      closeEditForm()
+      setSuccess(`${learnerName}'s details were updated successfully.`)
+    } catch (requestError) {
+      setEditError(
+        requestError.message || 'Unable to update this learner. Please try again.'
+      )
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const refresh = async () => {
     setLoading(true)
     setError('')
@@ -200,7 +311,7 @@ function LearnerDirectory({ role }) {
         description={
           isAdmin
             ? 'Manage learner records and register new learners into your school.'
-            : 'View learners in the classes assigned to you.'
+            : 'View and update learners in the classes assigned to you.'
         }
       >
         <div className="learner-heading-actions">
@@ -219,6 +330,7 @@ function LearnerDirectory({ role }) {
               type="button"
               className="learner-primary-button"
               onClick={() => {
+                closeEditForm()
                 setFormError('')
                 setSuccess('')
                 setShowForm(true)
@@ -265,6 +377,136 @@ function LearnerDirectory({ role }) {
           </div>
         </article>
       </section>
+
+      {editingLearner && (
+        <section className="learner-form-card" aria-labelledby="learner-edit-title">
+          <div className="learner-form-heading">
+            <div>
+              <p className="eyebrow">Learner record</p>
+              <h3 id="learner-edit-title">Edit learner details</h3>
+              <p>
+                {isAdmin
+                  ? 'Update the learner details and class assignment.'
+                  : 'Update the learner name or date of birth.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="learner-close-button"
+              onClick={closeEditForm}
+              aria-label="Close edit form"
+              disabled={saving}
+            >
+              <X size={19} />
+            </button>
+          </div>
+
+          {editError && (
+            <div className="learner-message learner-message-error" role="alert">
+              <AlertCircle size={18} />
+              <span>{editError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleUpdateLearner}>
+            <div className="learner-form-grid">
+              <FormField id="editFirstName" label="First name">
+                <input
+                  id="editFirstName"
+                  name="firstName"
+                  value={editForm.firstName}
+                  onChange={updateEditField}
+                  placeholder="Enter first name"
+                  maxLength={60}
+                  autoComplete="given-name"
+                  required
+                />
+              </FormField>
+
+              <FormField id="editLastName" label="Last name">
+                <input
+                  id="editLastName"
+                  name="lastName"
+                  value={editForm.lastName}
+                  onChange={updateEditField}
+                  placeholder="Enter last name"
+                  maxLength={60}
+                  autoComplete="family-name"
+                  required
+                />
+              </FormField>
+
+              <FormField id="editDateOfBirth" label="Date of birth" hint="Optional.">
+                <input
+                  id="editDateOfBirth"
+                  name="dateOfBirth"
+                  type="date"
+                  value={editForm.dateOfBirth}
+                  onChange={updateEditField}
+                />
+              </FormField>
+
+              {isAdmin && (
+                <>
+                  <FormField id="editAdmissionNumber" label="Admission number">
+                    <input
+                      id="editAdmissionNumber"
+                      name="admissionNumber"
+                      value={editForm.admissionNumber}
+                      onChange={updateEditField}
+                      maxLength={40}
+                      required
+                    />
+                  </FormField>
+
+                  <FormField id="editClassId" label="Assigned class">
+                    <select
+                      id="editClassId"
+                      name="classId"
+                      value={editForm.classId}
+                      onChange={updateEditField}
+                      required
+                    >
+                      <option value="">Select a class</option>
+                      {classes.map((schoolClass) => (
+                        <option key={schoolClass.id} value={schoolClass.id}>
+                          {schoolClass.name}
+                          {schoolClass.academicYear ? ` · ${schoolClass.academicYear}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </FormField>
+                </>
+              )}
+            </div>
+
+            <div className="learner-form-footer">
+              <p>
+                {isAdmin
+                  ? 'Changes will be saved to the school learner record.'
+                  : 'Your changes will be saved to this learner record.'}
+              </p>
+              <div>
+                <button
+                  type="button"
+                  className="learner-secondary-button"
+                  onClick={closeEditForm}
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="learner-primary-button"
+                  disabled={saving}
+                >
+                  {saving ? 'Saving…' : 'Save changes'}
+                </button>
+              </div>
+            </div>
+          </form>
+        </section>
+      )}
 
       {showForm && isAdmin && (
         <section className="learner-form-card" aria-labelledby="learner-form-title">
@@ -445,6 +687,7 @@ function LearnerDirectory({ role }) {
                   <th scope="col">Class</th>
                   <th scope="col">Date of birth</th>
                   <th scope="col">Status</th>
+                  <th scope="col">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -465,6 +708,17 @@ function LearnerDirectory({ role }) {
                       <span className={`learner-status ${learner.isActive ? 'is-active' : 'is-inactive'}`}>
                         {learner.isActive ? 'Active' : 'Inactive'}
                       </span>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="learner-edit-button"
+                        onClick={() => openEditForm(learner)}
+                        aria-label={`Edit ${learner.firstName} ${learner.lastName}`}
+                      >
+                        <Pencil size={14} />
+                        Edit
+                      </button>
                     </td>
                   </tr>
                 ))}

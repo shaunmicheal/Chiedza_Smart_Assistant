@@ -13,10 +13,11 @@
 7. [Assessments](#assessments)
 8. [Early-Warning Rules & Alerts](#early-warning-rules--alerts)
 9. [Parent Communication Drafts](#parent-communication-drafts)
-10. [Error Response Format](#error-response-format)
-11. [Role Permissions](#role-permissions)
-12. [Environment Variables](#environment-variables)
-13. [Integration Limitations](#backend-integration-limitations)
+10. [Parent Portal](#parent-portal)
+11. [Error Response Format](#error-response-format)
+12. [Role Permissions](#role-permissions)
+13. [Environment Variables](#environment-variables)
+14. [Integration Limitations](#backend-integration-limitations)
 
 ---
 
@@ -346,7 +347,35 @@ All routes are prefixed with `/api`. Authentication uses JWT tokens (Bearer head
 
 ## Early-Warning Rules & Alerts
 
-### GET /api/schools/:schoolId/early-warning-alerts
+### POST /api/schools/:schoolId/early-warning/rules
+
+**Authentication:** Authenticated user, completed password change, active school membership, and `SCHOOL_ADMIN` role.
+
+Creates an alert rule.
+
+### GET /api/schools/:schoolId/early-warning/rules
+
+**Authentication:** Authenticated user, completed password change, active school membership, and `SCHOOL_ADMIN` role.
+
+Lists the school alert rules.
+
+### PATCH /api/schools/:schoolId/early-warning/rules/:ruleId
+
+**Authentication:** Authenticated user, completed password change, active school membership, and `SCHOOL_ADMIN` role.
+
+Updates an alert rule.
+
+### DELETE /api/schools/:schoolId/early-warning/rules/:ruleId
+
+**Authentication:** Authenticated user, completed password change, active school membership, and `SCHOOL_ADMIN` role.
+
+Deletes an alert rule.
+
+### GET /api/schools/:schoolId/early-warning/class-alerts
+
+**Authentication:** Authenticated user, completed password change, and active school membership. Class-level access is checked by the controller.
+
+### GET /api/schools/:schoolId/early-warning/alerts
 
 **Authentication:** `requireSchoolMembership`.
 
@@ -355,7 +384,7 @@ All routes are prefixed with `/api`. Authentication uses JWT tokens (Bearer head
 { "success": true, "data": [{ "id": "...", "alertType": "...", "status": "ACTIVE", "evidence": {...}, ... }] }
 ```
 
-### GET /api/schools/:schoolId/early-warning-alerts/:alertId
+### GET /api/schools/:schoolId/early-warning/alerts/:alertId
 
 **Authentication:** `requireSchoolMembership`.
 
@@ -364,13 +393,13 @@ All routes are prefixed with `/api`. Authentication uses JWT tokens (Bearer head
 { "success": true, "data": { "id": "...", "alertType": "...", "status": "ACTIVE", ... } }
 ```
 
-### POST /api/schools/:schoolId/early-warning-alerts/:alertId/acknowledge
+### PATCH /api/schools/:schoolId/early-warning/alerts/:alertId/acknowledge
 
 **Authentication:** `requireSchoolMembership`.
 
 **Response (200):** Acknowledged alert.
 
-### POST /api/schools/:schoolId/early-warning-alerts/:alertId/resolve
+### PATCH /api/schools/:schoolId/early-warning/alerts/:alertId/resolve
 
 **Authentication:** `requireSchoolMembership`.
 
@@ -425,6 +454,26 @@ All routes are prefixed with `/api`. Authentication uses JWT tokens (Bearer head
 
 ---
 
+## Parent Portal
+
+All endpoints require authentication, completed password change, and an active `PARENT` membership. Data is limited to the signed-in parent's verified links to active learners.
+
+### GET /api/parent/children
+Returns verified parent-learner links, including a nested learner with class and school information.
+
+### GET /api/parent/attendance
+Returns attendance records for linked learners, including learner details.
+
+### GET /api/parent/assessments
+Returns assessment results with nested assessment and learner details.
+
+### GET /api/parent/messages
+Returns only approved communication drafts associated with alerts for linked learners.
+
+There is no separate parent notifications endpoint or WhatsApp delivery service currently implemented.
+
+---
+
 ## Error Response Format
 
 All errors follow this format:
@@ -454,7 +503,7 @@ All errors follow this format:
 |------|-------------|
 | **SCHOOL_ADMIN** | Full access to all school data, can create/edit/delete classes, learners, assessments, attendance; can manage teachers; can approve drafts |
 | **TEACHER** | Can access assigned classes only; can record attendance and assessments for assigned classes; can create/edit drafts for assigned classes; can approve their own drafts |
-| **PARENT** | No access to school management features; only access to parent-specific endpoints (not documented here) |
+| **PARENT** | Can access only their own linked learners, attendance, assessment results and approved parent messages |
 
 ### Data Access Restrictions
 
@@ -479,24 +528,23 @@ All errors follow this format:
 - `JWT_EXPIRES_IN` — JWT token expiry (default: 1h)
 - `CLIENT_URL` — Frontend URL for CORS (default: http://localhost:5173)
 - `NODE_ENV` — Environment (default: development)
-- `PORT` — Server port (default: 3000)
+- `PORT` — Server port (default: 5000)
 
 ---
 
 ## Backend Integration Limitations
 
 1. **No real-time updates**: Changes require page refresh
-2. **No WebSocket/SSE**: No automatic notifications
-3. **Draft approval does not deliver**: Approving a draft only changes status; does not send message
+2. **No automatic notifications**: WebSocket/SSE delivery is not implemented
+3. **Draft approval does not deliver**: Approving a draft only changes status; it does not send a message
 4. **OpenAI dependency**: Draft generation requires `OPENAI_API_KEY` and network access
-5. **No caching**: OpenAI API called on each generation request
+5. **No caching**: OpenAI API is called on each generation request
 6. **No batch operations**: All operations are individual
-7. **No offline support**: All operations require backend connection
+7. **No offline support**: All operations require a backend connection
 8. **No optimistic locking**: Concurrent edits may conflict; last write wins
-9. **Database dependency**: All operations require functioning Prisma connection
-10. **Rate limiting**: Not implemented at API level
-11. **No WebSocket/SSE**: No automatic notifications when records are created or updated
-12. **Assessment early warning**: Early warning evaluation runs after each attendance/assessment recording
+9. **Database dependency**: All operations require a functioning Prisma connection
+10. **Rate-limit coverage**: API, authentication, login, and bootstrap routes have configured limits; health checks are not covered by the general API limiter
+11. **Assessment early warning**: Early-warning evaluation runs after each attendance or assessment recording
 
 ---
 

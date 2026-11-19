@@ -28,7 +28,35 @@ export const getLearner = async (req, res, next) => {
 
 export const updateLearner = async (req, res, next) => {
   try {
-    const data = await learnerService.updateLearner(req.params.schoolId, req.params.learnerId, req.body);
+    let updateData = req.body;
+
+    if (req.role === "TEACHER") {
+      const teacherEditableFields = ["firstName", "lastName", "dateOfBirth"];
+      const restrictedFields = Object.keys(req.body).filter(
+        (field) => !teacherEditableFields.includes(field)
+      );
+
+      if (restrictedFields.length > 0) {
+        return res.status(403).json({
+          success: false,
+          message:
+            "Teachers can only update a learner's first name, last name and date of birth.",
+        });
+      }
+
+      updateData = Object.fromEntries(
+        Object.entries(req.body).filter(([field]) =>
+          teacherEditableFields.includes(field)
+        )
+      );
+    }
+
+    const data = await learnerService.updateLearner(
+      req.params.schoolId,
+      req.params.learnerId,
+      updateData
+    );
+
     res.status(200).json({ success: true, data });
   } catch (error) { next(error); }
 };

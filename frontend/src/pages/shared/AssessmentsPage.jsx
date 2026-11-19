@@ -515,9 +515,40 @@ function AssessmentsPage({ role }) {
 
       await loadRegister()
     } catch (requestError) {
+      let recoveryMessage = ''
+
+      if (savedCount > 0) {
+        try {
+          const refreshedResponse = await apiRequest(
+            `/schools/${schoolId}/assessments/${selectedId}`
+          )
+
+          const refreshedDetail = getRecord(
+            refreshedResponse,
+            'recovered assessment'
+          )
+
+          const refreshedScores = {}
+
+          for (const result of refreshedDetail.results ?? []) {
+            refreshedScores[result.learnerId] = String(result.score)
+          }
+
+          // Reconcile saved records without discarding unsaved score inputs.
+          setSelectedDetail(refreshedDetail)
+          setSavedScores(refreshedScores)
+
+          recoveryMessage =
+            ' Saved records have been reconciled; unsaved changes remain available to retry.'
+        } catch {
+          recoveryMessage =
+            ' The saved records could not be reloaded. Refresh the assessment before retrying.'
+        }
+      }
+
       setError(
         savedCount > 0
-          ? `${savedCount} score(s) were saved before an error occurred: ${requestError.message}. Refresh the assessment to check the saved records.`
+          ? `${savedCount} score(s) were saved before an error occurred: ${requestError.message}.${recoveryMessage}`
           : requestError.message || 'Unable to save assessment results.'
       )
     } finally {

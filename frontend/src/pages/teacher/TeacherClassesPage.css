@@ -1,0 +1,232 @@
+/* Assigned Classes page - scoped styles */
+.teacher-classes-page {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.teacher-classes-page .learner-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.teacher-classes-page .learner-secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 9px 14px;
+  border: 1px solid rgba(23, 77, 58, 0.18);
+  border-radius: 10px;
+  background: #fff;
+  color: #174d3a;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.teacher-classes-page .learner-secondary-button:hover:not(:disabled) {
+  border-color: #174d3a;
+  background: #f1f6f0;
+}
+
+.teacher-classes-page .learner-secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.teacher-classes-page .learner-spin {
+  animation: teacher-classes-spin 1s linear infinite;
+}
+
+@keyframes teacher-classes-spin {
+  to { transform: rotate(360deg); }
+}
+
+.teacher-classes-page .learner-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid rgba(163, 63, 50, 0.2);
+  border-radius: 12px;
+  background: #fff8f6;
+  color: #a33f32;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.teacher-classes-page .learner-message svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.teacher-classes-page .learner-stat-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 15px;
+}
+
+.teacher-classes-page .learner-stat-card {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  min-height: 108px;
+  padding: 20px;
+  border: 1px solid rgba(23, 77, 58, 0.1);
+  border-radius: 15px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgba(24, 48, 35, 0.035);
+}
+
+.teacher-classes-page .learner-stat-icon {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  place-items: center;
+  border-radius: 13px;
+  background: #edf4ec;
+  color: #174d3a;
+}
+
+.teacher-classes-page .learner-stat-label {
+  display: block;
+  margin-bottom: 5px;
+  color: #68766d;
+  font-size: 0.8rem;
+  font-weight: 550;
+}
+
+.teacher-classes-page .learner-stat-card strong {
+  color: #174d3a;
+  font-family: 'Poppins', sans-serif;
+  font-size: 1.55rem;
+  font-weight: 700;
+}
+
+.teacher-classes-page .learner-table-card {
+  overflow: hidden;
+  border: 1px solid rgba(23, 77, 58, 0.1);
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgba(24, 48, 35, 0.035);
+}
+
+.teacher-classes-page .learner-table-heading {
+  padding: 21px 22px;
+  border-bottom: 1px solid rgba(23, 77, 58, 0.09);
+}
+
+.teacher-classes-page .learner-table-heading h3 {
+  margin: 0 0 5px;
+  color: #174d3a;
+  font-size: 1rem;
+}
+
+.teacher-classes-page .learner-table-heading p {
+  margin: 0;
+  color: #68766d;
+  font-size: 0.83rem;
+  line-height: 1.5;
+}
+
+.teacher-classes-page .learner-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.teacher-classes-page .learner-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.teacher-classes-page .learner-table th {
+  padding: 13px 18px;
+  background: #f5f7f3;
+  color: #68766d;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.teacher-classes-page .learner-table td {
+  padding: 17px 18px;
+  border-bottom: 1px solid rgba(23, 77, 58, 0.075);
+  color: #48564e;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  vertical-align: middle;
+}
+
+.teacher-classes-page .learner-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.teacher-classes-page .learner-table tbody tr:hover {
+  background: #fbfcfa;
+}
+
+.teacher-classes-page .learner-table td strong {
+  color: #24382d;
+  font-weight: 650;
+}
+
+.teacher-classes-page .learner-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: #edf4ec;
+  color: #245c3d;
+  font-size: 0.75rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.teacher-classes-page .learner-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 190px;
+  padding: 30px 20px;
+  color: #68766d;
+  text-align: center;
+}
+
+.teacher-classes-page .learner-empty-state > svg {
+  color: #64816d;
+}
+
+.teacher-classes-page .learner-empty-state h3 {
+  margin: 3px 0 0;
+  color: #174d3a;
+  font-size: 1rem;
+}
+
+.teacher-classes-page .learner-empty-state p {
+  max-width: 430px;
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.6;
+}
+
+@media (max-width: 700px) {
+  .teacher-classes-page .learner-stat-row {
+    grid-template-columns: 1fr;
+  }
+
+  .teacher-classes-page .learner-table th,
+  .teacher-classes-page .learner-table td {
+    padding: 12px;
+  }
+}

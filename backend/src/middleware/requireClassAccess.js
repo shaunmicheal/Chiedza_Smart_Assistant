@@ -78,6 +78,56 @@ export const requireClassAccess = async (req, res, next) => {
       return next();
     }
 
+    // Authorise learner routes using the learner's existing class.
+    // A PATCH body must never override the learner's current class scope.
+    if (req.params?.learnerId) {
+      const learner = await prisma.learner.findFirst({
+        where: {
+          id: req.params.learnerId,
+          schoolId: req.schoolId,
+        },
+        select: { classId: true },
+      });
+
+      if (!learner) {
+        return res.status(404).json({
+          success: false,
+          message: "Learner not found in this school.",
+        });
+      }
+
+      if (req.role === "SCHOOL_ADMIN") {
+        return next();
+      }
+
+      const membershipId = req.membership?.id;
+
+      if (!membershipId) {
+        return res.status(403).json({
+          success: false,
+          message: "No membership found for this user.",
+        });
+      }
+
+      const classTeacher = await prisma.classTeacher.findFirst({
+        where: {
+          schoolId: req.schoolId,
+          classId: learner.classId,
+          membershipId,
+        },
+        select: { id: true },
+      });
+
+      if (!classTeacher) {
+        return res.status(403).json({
+          success: false,
+          message: "You are not authorised to access this learner.",
+        });
+      }
+
+      return next();
+    }
+
     let classId =
       req.params?.classId ||
       req.body?.classId ||

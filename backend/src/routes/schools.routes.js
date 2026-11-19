@@ -68,7 +68,7 @@ router.delete(
 router.get("/:schoolId/learners", validate(listLearnersQuerySchema), requireSchoolMembership, requireClassAccess, learnerCtrl.listLearners);
 router.post("/:schoolId/learners", validate(createLearnerSchema), requireSchoolMembership, requireRole("SCHOOL_ADMIN"), learnerCtrl.createLearner);
 router.get("/:schoolId/learners/:learnerId", validate(schoolAndIdParamSchema("learnerId")), requireSchoolMembership, requireClassAccess, learnerCtrl.getLearner);
-router.patch("/:schoolId/learners/:learnerId", validate(updateLearnerSchema), requireSchoolMembership, requireRole("SCHOOL_ADMIN"), learnerCtrl.updateLearner);
+router.patch("/:schoolId/learners/:learnerId", validate(updateLearnerSchema), requireSchoolMembership, requireClassAccess, learnerCtrl.updateLearner);
 router.delete("/:schoolId/learners/:learnerId", validate(schoolAndIdParamSchema("learnerId")), requireSchoolMembership, requireRole("SCHOOL_ADMIN"), learnerCtrl.removeLearner);
 
 export default router;

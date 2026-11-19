@@ -3,6 +3,7 @@ import { useAuth } from '../../context/useAuth'
 import { apiRequest } from '../../lib/api'
 import PageHeading from '../../components/common/PageHeading'
 import Panel from '../../components/common/Panel'
+import { useAutoDismiss } from '../../hooks/useAutoDismiss'
 
 const formatDate = (value) => {
   if (!value) return 'Date unavailable'
@@ -35,6 +36,7 @@ function ParentCommunicationPage({ role }) {
   const [pageError, setPageError] = useState('')
   const [actionError, setActionError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
+  useAutoDismiss(successMessage, setSuccessMessage)
 
   const loadData = useCallback(async () => {
     if (!schoolId) {

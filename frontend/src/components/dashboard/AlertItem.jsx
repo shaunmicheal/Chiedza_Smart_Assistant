@@ -11,7 +11,7 @@ function AlertItem({ title, detail, level, time, action, className = '' }) {
         <span>{detail}</span>
       </span>
       <time>{time}</time>
-      {action && <span className="alert-item-action">{action}</span>}
+      {action && <div className="alert-item-action">{action}</div>}
     </li>
   )
 }

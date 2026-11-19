@@ -3,6 +3,7 @@ import { useAuth } from "../../context/useAuth";
 import { apiRequest } from "../../lib/api";
 
 import Panel from "../../components/common/Panel";
+import { useAutoDismiss } from "../../hooks/useAutoDismiss";
 import PageHeading from "../../components/common/PageHeading";
 
 function DraftsPage() {
@@ -26,6 +27,7 @@ function DraftsPage() {
   const [approvingDraftId, setApprovingDraftId] = useState(null);
   const [actionError, setActionError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  useAutoDismiss(successMessage, setSuccessMessage);
 
   const loadData = async () => {
     if (!schoolId) {

@@ -1,11 +1,22 @@
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
-import { loginController, meController, logoutController, passwordChangeController } from "../controllers/auth.controller.js";
+import {
+  loginController,
+  meController,
+  logoutController,
+  passwordChangeController,
+  profileUpdateController,
+} from "../controllers/auth.controller.js";
 import { authenticate } from "../middleware/authenticate.js";
 import { requirePasswordChangeComplete } from "../middleware/requirePasswordChangeComplete.js";
 import { requireRole, requireSchoolMembership } from "../middleware/authorize.js";
 import { validate } from "../middleware/validate.js";
-import { loginSchema, schoolContextSchema, passwordChangeSchema } from "../validators/auth.validators.js";
+import {
+  loginSchema,
+  schoolContextSchema,
+  passwordChangeSchema,
+  updateProfileSchema,
+} from "../validators/auth.validators.js";
 
 const router = Router();
 
@@ -22,6 +33,13 @@ const loginLimiter =
 router.post("/login", loginLimiter, validate(loginSchema), loginController);
 
 router.get("/me", authenticate, meController);
+
+router.patch(
+  "/profile",
+  authenticate,
+  validate(updateProfileSchema),
+  profileUpdateController
+);
 
 router.post("/logout", authenticate, logoutController);
 

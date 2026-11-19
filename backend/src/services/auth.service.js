@@ -175,3 +175,34 @@ export const changePassword = async (userId, { currentPassword, newPassword }) =
 
   return { mustChangePassword: false };
 };
+
+
+export const updateProfile = async (userId, data) => {
+  const updateData = {};
+
+  if (data.firstName !== undefined) {
+    updateData.firstName = data.firstName.trim();
+  }
+
+  if (data.lastName !== undefined) {
+    updateData.lastName = data.lastName.trim();
+  }
+
+  if (data.phone !== undefined) {
+    updateData.phone = data.phone?.trim() || null;
+  }
+
+  return prisma.user.update({
+    where: { id: userId },
+    data: updateData,
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true,
+      phone: true,
+      isActive: true,
+      mustChangePassword: true,
+    },
+  });
+};

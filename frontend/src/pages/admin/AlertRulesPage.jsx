@@ -4,6 +4,7 @@ import { useAuth } from '../../context/useAuth'
 import { apiRequest } from '../../lib/api'
 import PageHeading from '../../components/common/PageHeading'
 import Panel from '../../components/common/Panel'
+import { useAutoDismiss } from '../../hooks/useAutoDismiss'
 
 const ruleDefinitions = [
   {
@@ -44,6 +45,7 @@ function AlertRulesPage() {
   const [changingId, setChangingId] = useState('')
   const [pageError, setPageError] = useState('')
   const [feedback, setFeedback] = useState('')
+  useAutoDismiss(feedback, setFeedback)
 
   const loadRules = useCallback(async () => {
     if (!schoolId) {

@@ -1,207 +1,289 @@
-import { useEffect, useState } from "react";
-import { useAuth } from "../../context/useAuth";
-import { apiRequest } from "../../lib/api";
+import { useCallback, useEffect, useState } from 'react'
+import { useAuth } from '../../context/useAuth'
+import { apiRequest } from '../../lib/api'
 
-import Panel from "../../components/common/Panel";
-import PageHeading from "../../components/common/PageHeading";
-import AlertItem from "../../components/dashboard/AlertItem";
+import Panel from '../../components/common/Panel'
+import PageHeading from '../../components/common/PageHeading'
+import AlertItem from '../../components/dashboard/AlertItem'
+
+function formatAssessment(value) {
+  if (!value || typeof value !== 'object') {
+    return value == null ? 'Not available' : String(value)
+  }
+
+  const name =
+    value.title || value.name || value.assessmentTitle || 'Assessment'
+  const score = value.percentage ?? value.score
+  const date = value.date
+    ? new Date(value.date).toLocaleDateString()
+    : ''
+
+  return [
+    name,
+    score !== undefined ? `${score}%` : '',
+    date,
+  ].filter(Boolean).join(' · ')
+}
+
+function describeEvidence(alert) {
+  const evidence =
+    alert.evidence && typeof alert.evidence === 'object'
+      ? alert.evidence
+      : {}
+
+  if (alert.alertType === 'REPEATED_ABSENCES') {
+    const count = evidence.absenceCount ?? alert.absencesCount
+    const threshold = evidence.threshold
+    const period = evidence.observationPeriodDays
+    const details = []
+
+    if (count !== undefined) {
+      details.push(`${count} recorded absences`)
+    }
+
+    if (threshold !== undefined) {
+      details.push(`alert threshold: ${threshold}`)
+    }
+
+    if (period !== undefined) {
+      details.push(`observed over ${period} days`)
+    }
+
+    return details.length
+      ? details.join(' · ')
+      : 'Repeated absences were detected. Review the learner attendance record.'
+  }
+
+  if (alert.alertType === 'ACADEMIC_DECLINE') {
+    const details = []
+    const compared =
+      evidence.assessmentsCompared ?? alert.assessmentsCompared
+    const threshold =
+      evidence.declineThreshold ?? alert.declineThreshold
+
+    if (compared !== undefined) {
+      details.push(`${compared} assessments compared`)
+    }
+
+    if (threshold !== undefined) {
+      details.push(`${threshold}% decline threshold`)
+    }
+
+    if (evidence.firstAssessment) {
+      details.push(
+        `Earlier: ${formatAssessment(evidence.firstAssessment)}`
+      )
+    }
+
+    if (evidence.lastAssessment) {
+      details.push(
+        `Latest: ${formatAssessment(evidence.lastAssessment)}`
+      )
+    }
+
+    return details.length
+      ? details.join(' · ')
+      : 'A decline in assessment performance was detected. Review the learner results.'
+  }
+
+  return 'Review the alert details and the learner record.'
+}
 
 function EarlyWarningsPage() {
-  const { user } = useAuth();
+  const { user } = useAuth()
 
-  // Check if teacher has assigned classes
-  const schoolId = user?.memberships?.find((m) => m.role === "TEACHER")?.schoolId;
-  // State for early warnings/alerts
-  const [earlyWarnings, setEarlyWarnings] = useState([]);
-  const [loadingEarlyWarnings, setLoadingEarlyWarnings] = useState(true);
-  const [earlyWarningsError, setEarlyWarningsError] = useState("");
+  const schoolId = user?.memberships?.find(
+    (membership) => membership.role === 'TEACHER'
+  )?.schoolId
 
-  // State for acknowledgement/resolution
-  const [acknowledging, setAcknowledging] = useState(false);
-  const [resolving, setResolving] = useState(false);
-  const [ackSuccess, setAckSuccess] = useState(false);
-  const [ackError, setAckError] = useState("");
-  const [resolvSuccess, setResolvSuccess] = useState(false);
-  const [resolvError, setResolvError] = useState("");
-  const [selectedAlertId, setSelectedAlertId] = useState(null);
+  const [earlyWarnings, setEarlyWarnings] = useState([])
+  const [loadingEarlyWarnings, setLoadingEarlyWarnings] = useState(true)
+  const [earlyWarningsError, setEarlyWarningsError] = useState('')
+  const [processingAlertId, setProcessingAlertId] = useState(null)
+  const [actionError, setActionError] = useState('')
+  const [actionSuccess, setActionSuccess] = useState('')
 
-  // 1. Load early warnings for assigned classes
+  const loadEarlyWarnings = useCallback(async () => {
+    if (!schoolId) {
+      setEarlyWarnings([])
+      setLoadingEarlyWarnings(false)
+      return
+    }
+
+    setLoadingEarlyWarnings(true)
+    setEarlyWarningsError('')
+
+    try {
+      const result = await apiRequest(
+        `/schools/${encodeURIComponent(schoolId)}/early-warning/alerts`,
+        {
+          query: { status: 'ACTIVE' },
+        }
+      )
+
+      setEarlyWarnings(
+        Array.isArray(result.data) ? result.data : []
+      )
+    } catch (error) {
+      setEarlyWarningsError(
+        error.message || 'Unable to load early warnings.'
+      )
+    } finally {
+      setLoadingEarlyWarnings(false)
+    }
+  }, [schoolId])
+
   useEffect(() => {
-    const loadEarlyWarnings = async () => {
-      if (!schoolId) {
-        setEarlyWarnings([]);
-        setLoadingEarlyWarnings(false);
-        return;
-      }
+    loadEarlyWarnings()
+  }, [loadEarlyWarnings])
 
-      setLoadingEarlyWarnings(true);
-      setEarlyWarningsError("");
+  const handleAlertAction = async (alertId, action) => {
+    if (!schoolId || !alertId || processingAlertId) return
 
-      try {
-        const result = await apiRequest(
-          `/schools/${encodeURIComponent(schoolId)}/early-warning/alerts?status=ACTIVE`,
-          { method: "GET", auth: true }
-        );
-
-        if (Array.isArray(result.data)) {
-          // Filter to only show alerts for teacher's assigned classes
-          const classIds = (await (
-            await apiRequest(`/schools/${encodeURIComponent(schoolId)}/classes`, { method: "GET", auth: true })
-          )).data || [];
-          const classIdSet = new Set(classIds.map((c) => c.id));
-
-          setEarlyWarnings(
-            result.data.filter((alert) =>
-              classIdSet.has(alert.classId) || !alert.classId
-            )
-          );
-        }
-      } catch (error) {
-        setEarlyWarningsError(
-          error.message || "Unable to load early warnings."
-        );
-      } finally {
-        setLoadingEarlyWarnings(false);
-      }
-    };
-
-    loadEarlyWarnings();
-  }, [schoolId]);
-
-  // 2. Acknowledge alert
-  const handleAcknowledge = async (alertId) => {
-    setAcknowledging(true);
-    setAckError("");
+    setProcessingAlertId(alertId)
+    setActionError('')
+    setActionSuccess('')
 
     try {
       const result = await apiRequest(
-        `/api/schools/${encodeURIComponent(schoolId)}/early-warning/alerts/${acknowledging ? acknowledging : alertId}/acknowledge`,
-        {
-          method: "PATCH",
-          auth: true,
-        }
-      );
+        `/schools/${encodeURIComponent(schoolId)}/early-warning/alerts/${encodeURIComponent(alertId)}/${action}`,
+        { method: 'PATCH' }
+      )
 
-      if (result.success) {
-        setAckSuccess(true);
-        setAckError("");
-        // Refresh warnings
-        const idx = earlyWarnings.findIndex((a) => a.id === alertId);
-        if (idx >= 0) {
-          earlyWarnings[idx].status = "ACKNOWLEDGED";
-        }
-      } else {
-        setAckError(result.message || "Unable to acknowledge alert.");
+      if (!result.success) {
+        throw new Error(
+          result.message || 'Unable to update this alert.'
+        )
       }
+
+      setEarlyWarnings((current) =>
+        current.filter((alert) => alert.id !== alertId)
+      )
+
+      setActionSuccess(
+        action === 'acknowledge'
+          ? 'Alert acknowledged.'
+          : 'Alert resolved.'
+      )
     } catch (error) {
-      setAckError(error.message || "Unable to acknowledge alert.");
+      setActionError(
+        error.message || 'Unable to update this alert.'
+      )
     } finally {
-      setAcknowledging(false);
+      setProcessingAlertId(null)
     }
-  };
+  }
 
-  // 3. Resolve alert
-  const handleResolve = async (alertId) => {
-    setResolving(true);
-    setResolvError("");
-
-    try {
-      const result = await apiRequest(
-        `/api/schools/${encodeURIComponent(schoolId)}/early-warning/alerts/${resolving ? resolving : alertId}/resolve`,
-        {
-          method: "PATCH",
-          auth: true,
-        }
-      );
-
-      if (result.success) {
-        setResolvSuccess(true);
-        setResolvError("");
-        // Refresh warnings
-        const idx = earlyWarnings.findIndex((a) => a.id === alertId);
-        if (idx >= 0) {
-          earlyWarnings[idx].status = "RESOLVED";
-        }
-      } else {
-        setResolvError(result.message || "Unable to resolve alert.");
-      }
-    } catch (error) {
-      setResolvError(error.message || "Unable to resolve alert.");
-    } finally {
-      setResolving(false);
-    }
-  };
-
-  if (!schoolId) return null;
+  if (!schoolId) {
+    return (
+      <main className="content">
+        <PageHeading
+          eyebrow="Early Warnings"
+          title="Active Alerts"
+          description="Your account does not currently have a teacher school membership."
+        />
+      </main>
+    )
+  }
 
   return (
     <main className="content">
       <PageHeading
         eyebrow="Early Warnings"
         title="Active Alerts"
-        description="View and manage alerts for assigned classes."
+        description="Review attendance and academic alerts for learners in your assigned classes."
       />
 
-      <Panel eyebrow="Active Alerts" title="Active Early Warnings">
+      <Panel eyebrow="Assigned classes" title="Active Early Warnings">
         {loadingEarlyWarnings ? (
-          <p role="status" aria-live="polite">Loading early warnings...</p>
+          <p role="status" aria-live="polite">
+            Loading early warnings...
+          </p>
         ) : earlyWarningsError ? (
           <div role="alert">
             <p>{earlyWarningsError}</p>
-            <button onClick={() => setEarlyWarningsError("")}>Try again</button>
+            <button type="button" onClick={loadEarlyWarnings}>
+              Retry loading alerts
+            </button>
           </div>
         ) : earlyWarnings.length === 0 ? (
-          <p role="status">No active early warnings.</p>
+          <p role="status">
+            There are no active early warnings for your assigned classes.
+          </p>
         ) : (
           <ul className="alert-list">
-            {earlyWarnings.map((alert) => (
-              <AlertItem
-                key={alert.id}
-                title={alert.alertRule?.alertType || alert.alertType}
-                detail={`Class: ${alert.className || 'Unknown'} · ${alert.evidence || ''}`}
-                level={alert.severity === 'high' ? 'urgent' : alert.severity === 'medium' ? 'warning' : 'info'}
-                onAcknowledge={() => handleAcknowledge(alert.id)}
-                onResolve={() => handleResolve(alert.id)}
-              />
-            ))}
+            {earlyWarnings.map((alert) => {
+              const learnerName = alert.learner
+                ? `${alert.learner.firstName} ${alert.learner.lastName}`
+                : 'Class-level alert'
+
+              const className =
+                alert.class?.name || 'Class not specified'
+
+              const title =
+                alert.alertRule?.name ||
+                (alert.alertType === 'REPEATED_ABSENCES'
+                  ? 'Repeated absences'
+                  : alert.alertType === 'ACADEMIC_DECLINE'
+                    ? 'Academic decline'
+                    : 'Early warning')
+
+              const isProcessing = processingAlertId === alert.id
+
+              return (
+                <AlertItem
+                  key={alert.id}
+                  title={title}
+                  detail={`${learnerName} · ${className} · ${describeEvidence(alert)}`}
+                  level="info"
+                  time={
+                    alert.createdAt
+                      ? new Date(alert.createdAt).toLocaleDateString()
+                      : ''
+                  }
+                  action={
+                    <div className="alert-actions">
+                      <button
+                        type="button"
+                        disabled={Boolean(processingAlertId)}
+                        onClick={() =>
+                          handleAlertAction(alert.id, 'acknowledge')
+                        }
+                      >
+                        {isProcessing ? 'Updating…' : 'Acknowledge'}
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={Boolean(processingAlertId)}
+                        onClick={() =>
+                          handleAlertAction(alert.id, 'resolve')
+                        }
+                      >
+                        Resolve
+                      </button>
+                    </div>
+                  }
+                />
+              )
+            })}
           </ul>
         )}
+
+        {actionError && (
+          <p role="alert" className="error">
+            {actionError}
+          </p>
+        )}
+
+        {actionSuccess && (
+          <p role="status" className="success">
+            {actionSuccess}
+          </p>
+        )}
       </Panel>
-
-      {selectedAlertId && (
-        <Panel
-          eyebrow="Alert Actions"
-          title="Alert Management"
-        >
-          {acknowledging ? (
-            <p role="status" aria-live="polite">Acknowledging alert...</p>
-          ) : ackError ? (
-            <div role="alert">
-              <p>{ackError}</p>
-              <button onClick={() => setAckError("")}>Try again</button>
-            </div>
-          ) : ackSuccess ? (
-            <div role="alert" className="success">
-              <p>Acknowledged successfully.</p>
-            </div>
-          ) : null}
-
-          {resolving ? (
-          <p role="status" aria-live="polite">Resolving alert...</p>
-        ) : resolvError ? (
-          <div role="alert">
-            <p>{resolvError}</p>
-            <button onClick={() => setResolvError("")}>Try again</button>
-          </div>
-        ) : resolvSuccess ? (
-          <div role="alert" className="success">
-            <p>Resolved successfully.</p>
-          </div>
-          ) : null}
-        </Panel>
-      )}
     </main>
-  );
+  )
 }
 
-export default EarlyWarningsPage;
+export default EarlyWarningsPage

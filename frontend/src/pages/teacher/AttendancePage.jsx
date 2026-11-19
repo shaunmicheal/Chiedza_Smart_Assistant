@@ -1,282 +1,359 @@
-import { useEffect, useState } from "react";
-import { useAuth } from "../../context/useAuth";
-import { apiRequest } from "../../lib/api";
+import { useCallback, useEffect, useState } from 'react'
+import { useAuth } from '../../context/useAuth'
+import { apiRequest } from '../../lib/api'
 
-import Panel from "../../components/common/Panel";
-import PageHeading from "../../components/common/PageHeading";
-import StatusBadge from "../../components/common/StatusBadge";
-import { FormField } from "../../components/common/FormField";
-import { Button } from "../../components/common/Button";
-import { Alert } from "../../components/common/Alert";
+import Panel from '../../components/common/Panel'
+import PageHeading from '../../components/common/PageHeading'
+import { Button } from '../../components/common/Button'
+
+function getToday() {
+  const date = new Date()
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
 
 function AttendancePage() {
-  const { user } = useAuth();
+  const { user } = useAuth()
+  const schoolId = user?.memberships?.find(
+    (membership) => membership.role === 'TEACHER'
+  )?.schoolId
 
-  // Check if teacher has assigned classes
-  const schoolId = user?.memberships?.find((m) => m.role === "TEACHER")?.schoolId;
-  // State for class selection
-  const [selectedClass, setSelectedClass] = useState(null);
-  const [classes, setClasses] = useState([]);
-  const [loadingClasses, setLoadingClasses] = useState(true);
-  const [classesError, setClassesError] = useState("");
+  const [classes, setClasses] = useState([])
+  const [selectedClass, setSelectedClass] = useState('')
+  const [loadingClasses, setLoadingClasses] = useState(true)
+  const [classesError, setClassesError] = useState('')
 
-  // State for attendance form
-  const [attendanceDate, setAttendanceDate] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  });
-  const [attendanceStatus, setAttendanceStatus] = useState("PRESENT");
-  const [attendanceLearners, setAttendanceLearners] = useState([]);
-  const [loadingLearners, setLoadingLearners] = useState(true);
-  const [learnersError, setLearnersError] = useState("");
+  const [attendanceDate, setAttendanceDate] = useState(getToday)
+  const [attendanceLearners, setAttendanceLearners] = useState([])
+  const [attendanceStatuses, setAttendanceStatuses] = useState({})
+  const [existingRecords, setExistingRecords] = useState({})
+  const [loadingLearners, setLoadingLearners] = useState(false)
+  const [learnersError, setLearnersError] = useState('')
 
-  // State for submitted attendance
-  const [submitting, setSubmitting] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-  const [saveError, setSaveError] = useState("");
+  const [submitting, setSubmitting] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState('')
+  const [saveError, setSaveError] = useState('')
 
-  // 1. Load available classes
-  useEffect(() => {
-    const loadClasses = async () => {
-      if (!schoolId) {
-        setClasses([]);
-        setLoadingClasses(false);
-        return;
-      }
-
-      setLoadingClasses(true);
-      setClassesError("");
-
-      try {
-        const result = await apiRequest(
-          `/schools/${encodeURIComponent(schoolId)}/classes`,
-          { method: "GET", auth: true }
-        );
-
-        if (Array.isArray(result.data)) {
-          setClasses(result.data);
-          // Select the first class automatically
-          if (result.data.length > 0) {
-            setSelectedClass(result.data[0].id);
-          }
-        }
-      } catch (error) {
-        setClassesError(
-          error.message || "Unable to load classes. Please try again."
-        );
-      } finally {
-        setLoadingClasses(false);
-      }
-    };
-
-    loadClasses();
-  }, [schoolId]);
-
-  // 2. Load learners for selected class
-  useEffect(() => {
-    const loadLearners = async () => {
-      if (!selectedClass || !schoolId) {
-        setAttendanceLearners([]);
-        setLoadingLearners(false);
-        return;
-      }
-
-      setLoadingLearners(true);
-      setLearnersError("");
-
-      try {
-        const result = await apiRequest(
-          `/schools/${encodeURIComponent(schoolId)}/learners`,
-          {
-            method: "GET",
-            auth: true,
-            query: { classId: selectedClass },
-          }
-        );
-
-        if (Array.isArray(result.data)) {
-          setAttendanceLearners(result.data);
-        }
-      } catch (error) {
-        setLearnersError(
-          error.message || "Unable to load learners. Please try again."
-        );
-      } finally {
-        setLoadingLearners(false);
-      }
-    };
-
-    loadLearners();
-  }, [schoolId, selectedClass]);
-
-  // 3. Handle attendance submission
-  const handleSaveAttendance = async (e) => {
-    e.preventDefault();
-    setSubmitting(true);
-    setSaveSuccess(false);
-    setSaveError("");
-
-    if (!selectedClass) {
-      setSaveError("Please select a class first");
-      setSubmitting(false);
-      return;
+  const loadClasses = useCallback(async () => {
+    if (!schoolId) {
+      setClasses([])
+      setLoadingClasses(false)
+      return
     }
 
-    // Build attendance records for each learner
-    const attendanceRecords = attendanceLearners.map((learner) => ({
-      learnerId: learner.id,
-      status: attendanceStatus,
-      date: attendanceDate,
-      schoolId: schoolId,
-      classId: selectedClass,
-      recordedById: user?.id,
-    }));
+    setLoadingClasses(true)
+    setClassesError('')
 
     try {
       const result = await apiRequest(
-        `/api/schools/${encodeURIComponent(schoolId)}/attendance`,
-        {
-          method: "POST",
-          auth: true,
-          body: { attendanceRecords },
-        }
-      );
+        `/schools/${encodeURIComponent(schoolId)}/classes`
+      )
+      const availableClasses = Array.isArray(result.data) ? result.data : []
 
-      if (result.success) {
-        setSaveSuccess(true);
-        setSaveError("");
-        // Refresh learners data
-        const idx = classes.findIndex((c) => c.id === selectedClass);
-        if (idx >= 0) {
-          const classObj = classes[idx];
-          const classLearnersPromise = apiRequest(
-            `/schools/${encodeURIComponent(schoolId)}/learners`,
-            { method: "GET", auth: true, query: { classId: selectedClass } }
-          );
-          // Just reset the learners state
-          setAttendanceLearners([]);
-          setLoadingLearners(true);
-        }
-      } else {
-        setSaveError(result.message || "Unable to save attendance.");
-      }
+      setClasses(availableClasses)
+      setSelectedClass((current) =>
+        current && availableClasses.some((item) => item.id === current)
+          ? current
+          : availableClasses[0]?.id || ''
+      )
     } catch (error) {
-      setSaveError(error.message || "Unable to save attendance.");
+      setClassesError(error.message || 'Unable to load assigned classes.')
     } finally {
-      setSubmitting(false);
+      setLoadingClasses(false)
     }
-  };
+  }, [schoolId])
 
-  if (!schoolId) return null;
+  useEffect(() => {
+    loadClasses()
+  }, [loadClasses])
+
+  const loadAttendance = useCallback(async () => {
+    if (!schoolId || !selectedClass || !attendanceDate) {
+      setAttendanceLearners([])
+      setAttendanceStatuses({})
+      setExistingRecords({})
+      setLoadingLearners(false)
+      return
+    }
+
+    setLoadingLearners(true)
+    setLearnersError('')
+    setSaveError('')
+    setSaveSuccess('')
+
+    try {
+      const [learnerResult, attendanceResult] = await Promise.all([
+        apiRequest(`/schools/${encodeURIComponent(schoolId)}/learners`, {
+          query: { classId: selectedClass },
+        }),
+        apiRequest(`/schools/${encodeURIComponent(schoolId)}/attendance`, {
+          query: { classId: selectedClass, date: attendanceDate },
+        }),
+      ])
+
+      const learners = Array.isArray(learnerResult.data)
+        ? learnerResult.data
+        : []
+      const records = Array.isArray(attendanceResult.data)
+        ? attendanceResult.data
+        : []
+
+      const recordsByLearner = Object.fromEntries(
+        records.map((record) => [record.learnerId, record])
+      )
+
+      setAttendanceLearners(learners)
+      setExistingRecords(recordsByLearner)
+      setAttendanceStatuses(
+        Object.fromEntries(
+          learners.map((learner) => [
+            learner.id,
+            recordsByLearner[learner.id]?.status || 'PRESENT',
+          ])
+        )
+      )
+    } catch (error) {
+      setAttendanceLearners([])
+      setExistingRecords({})
+      setAttendanceStatuses({})
+      setLearnersError(
+        error.message || 'Unable to load learners and attendance.'
+      )
+    } finally {
+      setLoadingLearners(false)
+    }
+  }, [schoolId, selectedClass, attendanceDate])
+
+  useEffect(() => {
+    loadAttendance()
+  }, [loadAttendance])
+
+  const handleSaveAttendance = async (event) => {
+    event.preventDefault()
+
+    if (
+      !schoolId ||
+      !selectedClass ||
+      !attendanceDate ||
+      !attendanceLearners.length ||
+      submitting
+    ) {
+      return
+    }
+
+    setSubmitting(true)
+    setSaveSuccess('')
+    setSaveError('')
+
+    let savedCount = 0
+    const failures = []
+
+    for (const learner of attendanceLearners) {
+      const existingRecord = existingRecords[learner.id]
+      const status = attendanceStatuses[learner.id] || 'PRESENT'
+
+      try {
+        const result = existingRecord
+          ? await apiRequest(
+              `/schools/${encodeURIComponent(schoolId)}/attendance/${encodeURIComponent(existingRecord.id)}`,
+              { method: 'PATCH', body: { status } }
+            )
+          : await apiRequest(
+              `/schools/${encodeURIComponent(schoolId)}/attendance`,
+              {
+                method: 'POST',
+                body: {
+                  learnerId: learner.id,
+                  date: attendanceDate,
+                  status,
+                },
+              }
+            )
+
+        if (!result.success) {
+          throw new Error(result.message || 'Attendance was not saved.')
+        }
+
+        savedCount += 1
+      } catch (error) {
+        failures.push(
+          `${learner.firstName} ${learner.lastName}: ${error.message}`
+        )
+      }
+    }
+
+    await loadAttendance()
+
+    if (failures.length === 0) {
+      setSaveSuccess(`Attendance saved for all ${savedCount} learners.`)
+    } else {
+      setSaveError(
+        `${savedCount} of ${attendanceLearners.length} records saved. ${failures.join(' | ')}`
+      )
+    }
+
+    setSubmitting(false)
+  }
+
+  const resetChanges = () => {
+    setAttendanceStatuses(
+      Object.fromEntries(
+        attendanceLearners.map((learner) => [
+          learner.id,
+          existingRecords[learner.id]?.status || 'PRESENT',
+        ])
+      )
+    )
+  }
+
+  if (!schoolId) {
+    return (
+      <main className="content">
+        <PageHeading
+          eyebrow="Attendance"
+          title="Record Attendance"
+          description="Your account does not currently have a teacher school membership."
+        />
+      </main>
+    )
+  }
 
   return (
     <main className="content">
       <PageHeading
         eyebrow="Attendance"
         title="Record Attendance"
-        description="Record attendance for learners in your assigned classes."
+        description="Record or correct attendance for learners in your assigned classes."
       />
 
-      <Panel eyebrow="Select Class" title="Choose Class">
+      <Panel eyebrow="Attendance details" title="Choose class and date">
         {loadingClasses ? (
-          <p role="status" aria-live="polite">Loading classes...</p>
+          <p role="status">Loading classes...</p>
         ) : classesError ? (
           <div role="alert">
             <p>{classesError}</p>
-            <button onClick={() => setClassesError("")}>Try again</button>
+            <button type="button" onClick={loadClasses}>
+              Retry loading classes
+            </button>
           </div>
-        ) : !classes.length ? (
-          <p role="status">No classes found. Contact your administrator.</p>
-        ) : (
-          <select
-            value={selectedClass}
-            onChange={(e) => setSelectedClass(e.target.value)}
-            aria-label="Select class"
-            disabled={submitting}
-          >
-            <option value="">-- Select a class --</option>
-            {classes.map((classroom) => (
-              <option key={classroom.id} value={classroom.id}>
-                {classroom.name} {classroom.academicYear ? `(${classroom.academicYear})` : ""}
-              </option>
-            ))}
-          </select>
-        )}
-
-        {selectedClass && (
-          <p className="class-selected">
-            Selected: {classes.find((c) => c.id === selectedClass)?.name || "Unknown class"}
+        ) : classes.length === 0 ? (
+          <p role="status">
+            No assigned classes were found. Contact your administrator.
           </p>
+        ) : (
+          <div className="attendance-controls">
+            <label className="form-field">
+              <span>Class</span>
+              <select
+                value={selectedClass}
+                onChange={(event) => setSelectedClass(event.target.value)}
+                disabled={submitting}
+              >
+                <option value="">Select a class</option>
+                {classes.map((classroom) => (
+                  <option key={classroom.id} value={classroom.id}>
+                    {classroom.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="form-field">
+              <span>Attendance date</span>
+              <input
+                type="date"
+                value={attendanceDate}
+                onChange={(event) => setAttendanceDate(event.target.value)}
+                disabled={submitting}
+                required
+              />
+            </label>
+          </div>
         )}
       </Panel>
 
-      <Panel eyebrow="Learners" title="Learners in class">
+      <Panel eyebrow="Class register" title="Learner attendance">
         {loadingLearners ? (
-          <p role="status" aria-live="polite">Loading learners...</p>
+          <p role="status" aria-live="polite">
+            Loading learners and saved attendance...
+          </p>
         ) : learnersError ? (
           <div role="alert">
             <p>{learnersError}</p>
-            <button onClick={() => setLearnersError("")}>Try again</button>
+            <button
+              type="button"
+              onClick={loadAttendance}
+            >
+              Retry loading register
+            </button>
           </div>
+        ) : !selectedClass ? (
+          <p role="status">Select a class to view its learners.</p>
         ) : attendanceLearners.length === 0 ? (
-          <p role="status">No learners found in this class.</p>
+          <p role="status">No learners are registered in this class yet.</p>
         ) : (
-          <ul className="learner-attendance-list">
-            {attendanceLearners.map((learner) => (
-              <li key={learner.id} className="learner-attendance-item">
-                <span className="learner-name">
-                  {learner.firstName} {learner.lastName}
-                </span>
-                <select
-                  value={attendanceStatus}
-                  onChange={(e) => setAttendanceStatus(e.target.value)}
-                  aria-label="Attendance status"
-                  data-learner-id={learner.id}
-                  className="status-select"
-                >
-                  <option value="PRESENT">Present</option>
-                  <option value="ABSENT">Absent</option>
-                  <option value="LATE">Late</option>
-                  <option value="EXCUSED">Excused</option>
-                </select>
-              </li>
-            ))}
-          </ul>
-        )}
+          <form onSubmit={handleSaveAttendance}>
+            <ul className="learner-attendance-list">
+              {attendanceLearners.map((learner) => {
+                const hasRecord = Boolean(existingRecords[learner.id])
 
-        {selectedClass && (
-          <p className="status-instruction">
-            Select a status for each learner, then click "Save Attendance"
-          </p>
-        )}
-      </Panel>
+                return (
+                  <li key={learner.id} className="learner-attendance-item">
+                    <span className="learner-name">
+                      {learner.firstName} {learner.lastName}
+                    </span>
 
-      <Panel eyebrow="Save Attendance" title="Save Attendance Records">
-        {submitting ? (
-          <p role="status" aria-live="polite">Saving attendance...</p>
-        ) : saveSuccess ? (
-          <div role="alert" className="success">
-            <p>Attendance saved successfully.</p>
-            <button onClick={() => setSaveSuccess(false)}>Close</button>
-          </div>
-        ) : saveError ? (
-          <div role="alert" className="error">
-            <p>{saveError}</p>
-            <button onClick={() => setSaveError("")}>Try again</button>
-          </div>
-        ) : (
-          <form onSubmit={handleSaveAttendance} className="attendance-form">
-            <Button type="submit" disabled={!selectedClass || submitting} color="primary">
-              {submitting ? "Saving…" : "Save Attendance"}
-            </Button>
-            <Button type="button" onClick={() => setSelectedClass(null)} disabled={submitting}>
-              Cancel
-            </Button>
+                    <span className="attendance-learner-status">
+                      <select
+                        value={attendanceStatuses[learner.id] || 'PRESENT'}
+                        onChange={(event) =>
+                          setAttendanceStatuses((current) => ({
+                            ...current,
+                            [learner.id]: event.target.value,
+                          }))
+                        }
+                        aria-label={`Attendance status for ${learner.firstName} ${learner.lastName}`}
+                        className="status-select"
+                        disabled={submitting}
+                      >
+                        <option value="PRESENT">Present</option>
+                        <option value="ABSENT">Absent</option>
+                        <option value="LATE">Late</option>
+                        <option value="EXCUSED">Excused</option>
+                      </select>
+                      <small>
+                        {hasRecord ? 'Saved record · will update' : 'Not yet recorded'}
+                      </small>
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+
+            <p className="status-instruction">
+              Existing records for this date are loaded automatically. Change
+              any status and save to create or correct the register.
+            </p>
+
+            {saveSuccess && (
+              <p role="status" className="success">{saveSuccess}</p>
+            )}
+            {saveError && (
+              <p role="alert" className="error">{saveError}</p>
+            )}
+
+            <div className="attendance-form">
+              <Button type="submit" disabled={submitting} color="primary">
+                {submitting ? 'Saving attendance…' : 'Save Attendance'}
+              </Button>
+              <button type="button" onClick={resetChanges} disabled={submitting}>
+                Reset changes
+              </button>
+            </div>
           </form>
         )}
       </Panel>
     </main>
-  );
+  )
 }
 
-export default AttendancePage;
+export default AttendancePage

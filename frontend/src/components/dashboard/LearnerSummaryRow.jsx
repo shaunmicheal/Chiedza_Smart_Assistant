@@ -16,8 +16,17 @@ function LearnerSummaryRow({ name, className, risk, priority }) {
           <span>{className}</span>
         </span>
       </div>
+
       <span className="learner-risk">{risk}</span>
-      <StatusBadge tone={priority.toLowerCase()} kind="priority">{priority}</StatusBadge>
+
+      {priority && (
+        <StatusBadge
+          tone={priority.toLowerCase()}
+          kind="priority"
+        >
+          {priority}
+        </StatusBadge>
+      )}
     </li>
   )
 }
