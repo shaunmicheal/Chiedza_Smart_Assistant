@@ -261,7 +261,7 @@ async function checkAcademicDecline(schoolId, learnerId, minAssessments = 3, dec
 async function evaluateLearnerEarlyWarnings(schoolId, learnerId) {
   // Verify the learner belongs to the school
   const learner = await prisma.learner.findFirst({
-    where: { schoolId, id: learnerId },
+    where: { schoolId, id: learnerId, isActive: true },
     select: { id: true, classId: true },
   });
 

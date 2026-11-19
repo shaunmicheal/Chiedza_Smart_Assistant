@@ -210,6 +210,12 @@ export const recordAssessmentResult = async (
     throw error;
   }
 
+  if (!learner.isActive) {
+    const error = new Error("Assessment results cannot be recorded for an inactive learner.");
+    error.status = 409;
+    throw error;
+  }
+
   const existing = await prisma.assessmentResult.findFirst({
     where: {
       schoolId,

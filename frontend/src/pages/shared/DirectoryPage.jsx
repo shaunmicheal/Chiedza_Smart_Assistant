@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   GraduationCap,
   Pencil,
+  Power,
   Plus,
   RefreshCw,
   Search,
@@ -58,6 +59,7 @@ function LearnerDirectory({ role }) {
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [updatingStatusId, setUpdatingStatusId] = useState(null)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   useAutoDismiss(success, setSuccess)
@@ -286,6 +288,44 @@ function LearnerDirectory({ role }) {
       )
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleToggleLearnerStatus = async (learner) => {
+    if (!isAdmin || !schoolId || updatingStatusId) return
+
+    const nextActive = !learner.isActive
+    const learnerName = `${learner.firstName} ${learner.lastName}`
+
+    const confirmationMessage = nextActive
+      ? `Reactivate ${learnerName}? Their verified parent links will become visible in the parent portal again.`
+      : `Deactivate ${learnerName}? Parent portal access will be hidden, pending invitations will be revoked, and existing attendance and assessment records will be retained.`
+
+    if (!window.confirm(confirmationMessage)) return
+
+    setUpdatingStatusId(learner.id)
+    setError('')
+    setSuccess('')
+
+    try {
+      await apiRequest(
+        `/schools/${encodeURIComponent(schoolId)}/learners/${encodeURIComponent(learner.id)}`,
+        {
+          method: 'PATCH',
+          body: { isActive: nextActive },
+        }
+      )
+
+      await loadDirectory()
+      setSuccess(
+        nextActive
+          ? `${learnerName} was reactivated. Their verified parent links are available again.`
+          : `${learnerName} was deactivated. Their existing records were retained.`
+      )
+    } catch (requestError) {
+      setError(requestError.message || 'Unable to update this learner status.')
+    } finally {
+      setUpdatingStatusId(null)
     }
   }
 
@@ -710,15 +750,33 @@ function LearnerDirectory({ role }) {
                       </span>
                     </td>
                     <td>
-                      <button
-                        type="button"
-                        className="learner-edit-button"
-                        onClick={() => openEditForm(learner)}
-                        aria-label={`Edit ${learner.firstName} ${learner.lastName}`}
-                      >
-                        <Pencil size={14} />
-                        Edit
-                      </button>
+                      <div className="learner-row-actions">
+                        <button
+                          type="button"
+                          className="learner-edit-button"
+                          onClick={() => openEditForm(learner)}
+                          aria-label={`Edit ${learner.firstName} ${learner.lastName}`}
+                        >
+                          <Pencil size={14} />
+                          Edit
+                        </button>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            className="learner-status-action"
+                            onClick={() => handleToggleLearnerStatus(learner)}
+                            disabled={updatingStatusId !== null}
+                            aria-label={`${learner.isActive ? 'Deactivate' : 'Reactivate'} ${learner.firstName} ${learner.lastName}`}
+                          >
+                            {updatingStatusId === learner.id ? (
+                              <RefreshCw size={14} className="learner-spin" />
+                            ) : (
+                              <Power size={14} />
+                            )}
+                            {learner.isActive ? 'Deactivate' : 'Reactivate'}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

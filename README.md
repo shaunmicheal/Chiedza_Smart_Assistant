@@ -251,3 +251,14 @@ The actual value must match the deployed backend service. Redeploy the frontend 
 ## License
 
 No open-source licence has been specified yet. All rights are reserved by the project owner unless a licence is added to this repository.
+
+## Learner lifecycle and record retention
+
+School administrators can deactivate and reactivate learners from the learner directory.
+
+Deactivation is not deletion:
+- Existing learner details, attendance records, assessment results, and verified parent links are retained.
+- Inactive learners are hidden from the parent portal. Reactivating a learner restores access through existing verified parent links.
+- Pending parent invitations are revoked when a learner is deactivated.
+- The system blocks new attendance and assessment entries for inactive learners and excludes them from early-warning evaluation.
+- Only school administrators can change a learner's active status. There is no permanent-delete action in the learner directory.

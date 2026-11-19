@@ -104,6 +104,26 @@ describe("Early warning service", () => {
       expect(result).toBeNull();
     });
 
+    it("does not evaluate early warnings for an inactive learner", async () => {
+      prisma.learner.findFirst.mockResolvedValue(null);
+
+      const result = await evaluateLearnerEarlyWarnings(
+        "school-1",
+        "inactive-learner"
+      );
+
+      expect(result).toBeNull();
+      expect(prisma.learner.findFirst).toHaveBeenCalledWith({
+        where: {
+          schoolId: "school-1",
+          id: "inactive-learner",
+          isActive: true,
+        },
+        select: { id: true, classId: true },
+      });
+      expect(prisma.alertRule.findMany).not.toHaveBeenCalled();
+    });
+
     it("should return null when no alert rules exist for school", async () => {
       prisma.learner.findFirst.mockResolvedValue({ id: "learner-1", classId: "class-1" });
       prisma.alertRule.findMany.mockResolvedValue([]);

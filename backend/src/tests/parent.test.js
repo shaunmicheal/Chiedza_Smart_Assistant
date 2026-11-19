@@ -438,6 +438,51 @@ describe("Parent portal data access", () => {
     expect(secondParentResponse.body.data[0].learnerId).toBe(learners[1].id);
   });
 
+  it("hides an inactive learner from the parent portal and restores access after reactivation", async () => {
+    const learnerId = learners[0].id;
+
+    const originalLink = await prisma.parentLearner.findFirst({
+      where: {
+        guardianUserId: parent1.parent.id,
+        learnerId,
+        status: "VERIFIED",
+      },
+    });
+    expect(originalLink).not.toBeNull();
+
+    await prisma.learner.update({
+      where: { id: learnerId },
+      data: { isActive: false },
+    });
+
+    const hiddenChildren = await request(app)
+      .get("/api/parent/children")
+      .set("Authorization", `Bearer ${parent1Token}`);
+
+    expect(hiddenChildren.status).toBe(200);
+    expect(hiddenChildren.body.data.map((link) => link.learnerId))
+      .not.toContain(learnerId);
+
+    const retainedLink = await prisma.parentLearner.findUnique({
+      where: { id: originalLink.id },
+    });
+    expect(retainedLink).not.toBeNull();
+    expect(retainedLink.status).toBe("VERIFIED");
+
+    await prisma.learner.update({
+      where: { id: learnerId },
+      data: { isActive: true },
+    });
+
+    const restoredChildren = await request(app)
+      .get("/api/parent/children")
+      .set("Authorization", `Bearer ${parent1Token}`);
+
+    expect(restoredChildren.status).toBe(200);
+    expect(restoredChildren.body.data.map((link) => link.learnerId))
+      .toContain(learnerId);
+  });
+
   it("returns only attendance belonging to the parent's children", async () => {
     const response = await request(app)
       .get("/api/parent/attendance")
@@ -687,6 +732,46 @@ describe("Parent invitation activation", () => {
     );
 
     expect(activation.status).toBe(409);
+  });
+
+  it("revokes pending invitations when their learner is deactivated", async () => {
+    const learnerId = learners[2].id;
+    const created = await createInvitation(
+      adminToken,
+      EMAILS.invitation3,
+      learnerId
+    );
+
+    expect(created.status).toBe(201);
+
+    const invitationId = created.body.data.invitation.id;
+    const code = created.body.data.invitationCode;
+
+    try {
+      const deactivated = await request(app)
+        .patch(`/api/schools/${school.id}/learners/${learnerId}`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ isActive: false });
+
+      expect(deactivated.status).toBe(200);
+      expect(deactivated.body.data.isActive).toBe(false);
+
+      const storedInvitation = await prisma.parentInvitation.findUnique({
+        where: { id: invitationId },
+      });
+      expect(storedInvitation.status).toBe("REVOKED");
+
+      const activation = await activateInvitation(
+        EMAILS.invitation3,
+        code
+      );
+      expect(activation.status).toBe(409);
+    } finally {
+      await prisma.learner.update({
+        where: { id: learnerId },
+        data: { isActive: true },
+      });
+    }
   });
 
   it("marks an expired invitation as expired and rejects activation", async () => {

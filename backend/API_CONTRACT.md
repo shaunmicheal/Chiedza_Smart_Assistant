@@ -617,3 +617,14 @@ All errors follow this format:
 ---
 
 *Generated from actual backend implementation. All endpoints documented here are implemented and verified against the source code.*
+
+## Learner lifecycle
+
+School administrators deactivate and reactivate learners using the learner PATCH endpoint (`isActive`). There is no learner DELETE endpoint.
+
+- Deactivation preserves learner records, attendance, assessment history, and verified parent links.
+- Inactive learners are hidden from the parent portal. Reactivation restores access through existing verified links.
+- Pending parent invitations are revoked when a learner is deactivated.
+- New attendance and assessment results cannot be recorded for inactive learners.
+- Early-warning evaluation excludes inactive learners.
+- Only school administrators can change `isActive`. Teachers remain limited to permitted profile updates for learners in their assigned classes.

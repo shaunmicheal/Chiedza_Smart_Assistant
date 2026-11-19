@@ -283,6 +283,57 @@ describe("Learner class access", () => {
     expect(res.status).toBe(403);
   });
 
+  it("allows a school admin to deactivate and reactivate a learner without deleting the record", async () => {
+    const deactivateRes = await request(app)
+      .patch(`/api/schools/${school.id}/learners/${learner1.id}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ isActive: false });
+
+    expect(deactivateRes.status).toBe(200);
+    expect(deactivateRes.body.data.isActive).toBe(false);
+
+    const retainedLearner = await prisma.learner.findUnique({
+      where: { id: learner1.id },
+    });
+    expect(retainedLearner).not.toBeNull();
+    expect(retainedLearner.isActive).toBe(false);
+
+    const reactivateRes = await request(app)
+      .patch(`/api/schools/${school.id}/learners/${learner1.id}`)
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ isActive: true });
+
+    expect(reactivateRes.status).toBe(200);
+    expect(reactivateRes.body.data.isActive).toBe(true);
+  });
+
+  it("prevents a teacher from changing learner active status", async () => {
+    const res = await request(app)
+      .patch(`/api/schools/${school.id}/learners/${learner2.id}`)
+      .set("Authorization", `Bearer ${teacherToken}`)
+      .send({ isActive: false });
+
+    expect(res.status).toBe(403);
+
+    const unchangedLearner = await prisma.learner.findUnique({
+      where: { id: learner2.id },
+    });
+    expect(unchangedLearner.isActive).toBe(true);
+  });
+
+  it("does not expose a learner hard-delete endpoint", async () => {
+    const res = await request(app)
+      .delete(`/api/schools/${school.id}/learners/${learner1.id}`)
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(404);
+
+    const retainedLearner = await prisma.learner.findUnique({
+      where: { id: learner1.id },
+    });
+    expect(retainedLearner).not.toBeNull();
+  });
+
   it("allows a school admin to update a learner admission number", async () => {
     const res = await request(app)
       .patch(`/api/schools/${school.id}/learners/${learner1.id}`)

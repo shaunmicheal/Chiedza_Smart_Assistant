@@ -60,10 +60,3 @@ export const updateLearner = async (req, res, next) => {
     res.status(200).json({ success: true, data });
   } catch (error) { next(error); }
 };
-
-export const removeLearner = async (req, res, next) => {
-  try {
-    await learnerService.removeLearner(req.params.schoolId, req.params.learnerId);
-    res.status(204).send();
-  } catch (error) { next(error); }
-};

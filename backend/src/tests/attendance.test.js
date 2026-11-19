@@ -220,6 +220,32 @@ describe("Attendance", () => {
     await prisma.school.delete({ where: { id: otherSchool.id } });
   });
 
+  it("rejects new attendance for an inactive learner", async () => {
+    await prisma.learner.update({
+      where: { id: learner1.id },
+      data: { isActive: false },
+    });
+
+    try {
+      const res = await request(app)
+        .post(`/api/schools/${school.id}/attendance`)
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({
+          learnerId: learner1.id,
+          date: "2026-11-19",
+          status: "PRESENT",
+        });
+
+      expect(res.status).toBe(409);
+      expect(res.body.message).toMatch(/inactive learner/i);
+    } finally {
+      await prisma.learner.update({
+        where: { id: learner1.id },
+        data: { isActive: true },
+      });
+    }
+  });
+
   it("invalid learner returns 404", async () => {
     const res = await request(app)
       .post(`/api/schools/${school.id}/attendance`)

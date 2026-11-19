@@ -41,6 +41,12 @@ export const recordAttendance = async (schoolId, data, recordedById) => {
     throw error;
   }
 
+  if (!learner.isActive) {
+    const error = new Error("Attendance cannot be recorded for an inactive learner.");
+    error.status = 409;
+    throw error;
+  }
+
   // Check for existing attendance on this date (idempotent upsert)
   const existing = await prisma.attendance.findFirst({
     where: {

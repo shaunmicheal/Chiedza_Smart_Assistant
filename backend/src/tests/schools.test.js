@@ -498,7 +498,7 @@ describe("Learners", () => {
     expect(res.status).toBe(409);
   });
 
-  it("teacher cannot delete learner (403)", async () => {
+  it("does not expose learner deletion to teachers or administrators (404)", async () => {
     const adminToken = await login(ADMIN1);
 
     const create = await request(app)
@@ -521,26 +521,46 @@ describe("Learners", () => {
       )
       .set("Authorization", `Bearer ${teacherToken}`);
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
+
+    const retained = await request(app)
+      .get(`/api/schools/${school1.id}/learners/${create.body.data.id}`)
+      .set("Authorization", `Bearer ${adminToken}`);
+
+    expect(retained.status).toBe(200);
   });
 
-  it("admin deletes learners then class", async () => {
+  it("admin deactivates learners but cannot delete their class or records", async () => {
     const token = await login(ADMIN1);
 
     const list = await request(app)
       .get(`/api/schools/${school1.id}/learners`)
       .set("Authorization", `Bearer ${token}`);
 
+    expect(list.body.data.length).toBeGreaterThan(0);
+
     for (const learner of list.body.data) {
-      await request(app)
-        .delete(`/api/schools/${school1.id}/learners/${learner.id}`)
-        .set("Authorization", `Bearer ${token}`);
+      const response = await request(app)
+        .patch(`/api/schools/${school1.id}/learners/${learner.id}`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ isActive: false });
+
+      expect(response.status).toBe(200);
+      expect(response.body.data.isActive).toBe(false);
     }
+
+    const retained = await request(app)
+      .get(`/api/schools/${school1.id}/learners`)
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(retained.status).toBe(200);
+    expect(retained.body.data).toHaveLength(list.body.data.length);
+    expect(retained.body.data.every((learner) => !learner.isActive)).toBe(true);
 
     const del = await request(app)
       .delete(`/api/schools/${school1.id}/classes/${class1.id}`)
       .set("Authorization", `Bearer ${token}`);
 
-    expect(del.status).toBe(204);
+    expect(del.status).toBe(409);
   });
 });

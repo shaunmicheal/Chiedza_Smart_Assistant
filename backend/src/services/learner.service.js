@@ -119,17 +119,40 @@ export const updateLearner = async (schoolId, learnerId, data) => {
     }
   }
 
+  const updateData = {
+    ...(data.firstName !== undefined && { firstName: data.firstName }),
+    ...(data.lastName !== undefined && { lastName: data.lastName }),
+    ...(data.admissionNumber !== undefined && { admissionNumber: data.admissionNumber }),
+    ...(data.classId !== undefined && { classId: data.classId }),
+    ...(data.isActive !== undefined && { isActive: data.isActive }),
+    ...(data.dateOfBirth !== undefined && { dateOfBirth: parseDate(data.dateOfBirth) }),
+  };
+
   try {
+    if (existing.isActive && data.isActive === false) {
+      return await prisma.$transaction(async (tx) => {
+        const learner = await tx.learner.update({
+          where: { id: learnerId },
+          data: updateData,
+          include: { schoolClass: true },
+        });
+
+        await tx.parentInvitation.updateMany({
+          where: {
+            schoolId,
+            learnerId,
+            status: "PENDING",
+          },
+          data: { status: "REVOKED" },
+        });
+
+        return learner;
+      });
+    }
+
     return await prisma.learner.update({
       where: { id: learnerId },
-      data: {
-        ...(data.firstName !== undefined && { firstName: data.firstName }),
-        ...(data.lastName !== undefined && { lastName: data.lastName }),
-        ...(data.admissionNumber !== undefined && { admissionNumber: data.admissionNumber }),
-        ...(data.classId !== undefined && { classId: data.classId }),
-        ...(data.isActive !== undefined && { isActive: data.isActive }),
-        ...(data.dateOfBirth !== undefined && { dateOfBirth: parseDate(data.dateOfBirth) }),
-      },
+      data: updateData,
       include: { schoolClass: true },
     });
   } catch (error) {
@@ -140,16 +163,4 @@ export const updateLearner = async (schoolId, learnerId, data) => {
     }
     throw error;
   }
-};
-
-export const removeLearner = async (schoolId, learnerId) => {
-  const existing = await prisma.learner.findFirst({
-    where: { id: learnerId, schoolId },
-  });
-  if (!existing) {
-    const error = new Error("Learner not found.");
-    error.status = 404;
-    throw error;
-  }
-  await prisma.learner.delete({ where: { id: learnerId } });
 };

@@ -288,4 +288,30 @@ describe("Assessments", () => {
     expect(res.status).toBe(200);
     expect(res.body.data.classId).toBe(class2.id);
   });
+
+  it("rejects new assessment results for an inactive learner", async () => {
+    await prisma.assessment.update({
+      where: { id: assessment1.id },
+      data: { classId: class1.id },
+    });
+    await prisma.learner.update({
+      where: { id: learner2.id },
+      data: { isActive: false },
+    });
+
+    try {
+      const res = await request(app)
+        .post("/api/schools/" + school.id + "/assessments/" + assessment1.id + "/results")
+        .set("Authorization", "Bearer " + adminToken)
+        .send({ learnerId: learner2.id, score: 60 });
+
+      expect(res.status).toBe(409);
+      expect(res.body.message).toMatch(/inactive learner/i);
+    } finally {
+      await prisma.learner.update({
+        where: { id: learner2.id },
+        data: { isActive: true },
+      });
+    }
+  });
 });
