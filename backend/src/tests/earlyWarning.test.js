@@ -6,7 +6,12 @@ vi.mock("../config/prisma.js", () => ({
     earlyWarningAlert: {
       findFirst: vi.fn(),
       create: vi.fn(),
+      updateMany: vi.fn(),
     },
+    alertStatusHistory: {
+      create: vi.fn(),
+    },
+    $transaction: vi.fn(),
     learner: {
       findFirst: vi.fn(),
     },
@@ -40,6 +45,15 @@ describe("Early warning service", () => {
     prisma.attendance.findMany.mockResolvedValue([]);
     prisma.earlyWarningAlert.findFirst.mockResolvedValue(null);
     prisma.earlyWarningAlert.create.mockResolvedValue({ id: "alert-new" });
+    prisma.earlyWarningAlert.updateMany.mockResolvedValue({ count: 1 });
+    prisma.alertStatusHistory.create.mockResolvedValue({ id: "history-new" });
+
+    prisma.$transaction.mockImplementation(async (callback) =>
+      callback({
+        earlyWarningAlert: prisma.earlyWarningAlert,
+        alertStatusHistory: prisma.alertStatusHistory,
+      }),
+    );
     prisma.learner.findFirst.mockResolvedValue({
       id: "learner-1",
       classId: "class-1",
@@ -132,18 +146,250 @@ describe("Early warning service", () => {
       expect(result).toBeNull();
     });
 
-    it("should evaluate repeated absences and academic decline", async () => {
-      prisma.learner.findFirst.mockResolvedValue({ id: "learner-1", classId: "class-1" });
+    const repeatedAbsenceRule = {
+      id: "rule-1",
+      name: "Repeated Absences",
+      alertType: "REPEATED_ABSENCES",
+      config: { absenceThreshold: 3, observationPeriodDays: 5 },
+    };
+
+    const attendanceWithRisk = [
+      { date: "2026-11-18", status: "ABSENT" },
+      { date: "2026-11-19", status: "ABSENT" },
+      { date: "2026-11-20", status: "PRESENT" },
+      { date: "2026-11-21", status: "ABSENT" },
+      { date: "2026-11-22", status: "PRESENT" },
+    ];
+
+    const attendanceWithoutRisk = [
+      { date: "2026-11-18", status: "PRESENT" },
+      { date: "2026-11-19", status: "PRESENT" },
+      { date: "2026-11-20", status: "PRESENT" },
+      { date: "2026-11-21", status: "PRESENT" },
+      { date: "2026-11-22", status: "PRESENT" },
+    ];
+
+    it("creates an active alert when repeated absences meet the configured threshold", async () => {
+      prisma.alertRule.findMany.mockResolvedValue([repeatedAbsenceRule]);
+      prisma.attendance.findMany.mockResolvedValue(attendanceWithRisk);
+
+      const result = await evaluateLearnerEarlyWarnings("school-1", "learner-1");
+
+      expect(prisma.earlyWarningAlert.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          schoolId: "school-1",
+          learnerId: "learner-1",
+          classId: "class-1",
+          alertType: "REPEATED_ABSENCES",
+          status: "ACTIVE",
+          alertRuleId: "rule-1",
+          absencesCount: 3,
+        }),
+      });
+      expect(result).toEqual([{ id: "alert-new" }]);
+    });
+
+    it("keeps an existing active alert while its risk persists", async () => {
+      prisma.alertRule.findMany.mockResolvedValue([repeatedAbsenceRule]);
+      prisma.attendance.findMany.mockResolvedValue(attendanceWithRisk);
+      prisma.earlyWarningAlert.findFirst.mockResolvedValue({
+        id: "alert-active",
+        status: "ACTIVE",
+      });
+
+      const result = await evaluateLearnerEarlyWarnings("school-1", "learner-1");
+
+      expect(result).toBeNull();
+      expect(prisma.earlyWarningAlert.create).not.toHaveBeenCalled();
+      expect(prisma.earlyWarningAlert.updateMany).not.toHaveBeenCalled();
+    });
+
+    it("keeps an acknowledged alert acknowledged while its risk persists", async () => {
+      prisma.alertRule.findMany.mockResolvedValue([repeatedAbsenceRule]);
+      prisma.attendance.findMany.mockResolvedValue(attendanceWithRisk);
+      prisma.earlyWarningAlert.findFirst.mockResolvedValue({
+        id: "alert-acknowledged",
+        status: "ACKNOWLEDGED",
+      });
+
+      const result = await evaluateLearnerEarlyWarnings("school-1", "learner-1");
+
+      expect(result).toBeNull();
+      expect(prisma.earlyWarningAlert.create).not.toHaveBeenCalled();
+      expect(prisma.earlyWarningAlert.updateMany).not.toHaveBeenCalled();
+    });
+
+    it("automatically resolves an alert and records its status history when risk clears", async () => {
+      prisma.alertRule.findMany.mockResolvedValue([repeatedAbsenceRule]);
+      prisma.attendance.findMany.mockResolvedValue(attendanceWithoutRisk);
+      prisma.earlyWarningAlert.findFirst.mockResolvedValue({
+        id: "alert-active",
+        status: "ACTIVE",
+      });
+
+      const result = await evaluateLearnerEarlyWarnings("school-1", "learner-1");
+
+      expect(result).toBeNull();
+      expect(prisma.$transaction).toHaveBeenCalledOnce();
+      expect(prisma.earlyWarningAlert.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: "alert-active",
+          schoolId: "school-1",
+          status: "ACTIVE",
+        },
+        data: expect.objectContaining({
+          status: "RESOLVED",
+          resolvedBy: null,
+          resolvedAt: expect.any(Date),
+        }),
+      });
+      expect(prisma.alertStatusHistory.create).toHaveBeenCalledWith({
+        data: {
+          alertId: "alert-active",
+          schoolId: "school-1",
+          fromStatus: "ACTIVE",
+          toStatus: "RESOLVED",
+          changedBy: null,
+        },
+      });
+    });
+
+    it("does not recreate a manually resolved alert while the risk persists", async () => {
+      const manuallyResolvedAlert = {
+        id: "alert-manually-resolved",
+        status: "RESOLVED",
+        resolvedBy: "teacher-1",
+        evidence: { absenceCount: 3 },
+      };
+
+      prisma.alertRule.findMany.mockResolvedValue([repeatedAbsenceRule]);
+      prisma.attendance.findMany.mockResolvedValue(attendanceWithRisk);
+      prisma.earlyWarningAlert.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(manuallyResolvedAlert);
+
+      const result = await evaluateLearnerEarlyWarnings("school-1", "learner-1");
+
+      expect(result).toBeNull();
+      expect(prisma.earlyWarningAlert.create).not.toHaveBeenCalled();
+    });
+
+    it("records a cleared condition after a manual resolution", async () => {
+      const manuallyResolvedAlert = {
+        id: "alert-manually-resolved",
+        status: "RESOLVED",
+        resolvedBy: "teacher-1",
+        evidence: { absenceCount: 3 },
+      };
+
+      prisma.alertRule.findMany.mockResolvedValue([repeatedAbsenceRule]);
+      prisma.attendance.findMany.mockResolvedValue(attendanceWithoutRisk);
+      prisma.earlyWarningAlert.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(manuallyResolvedAlert);
+
+      const result = await evaluateLearnerEarlyWarnings("school-1", "learner-1");
+
+      expect(result).toBeNull();
+      expect(prisma.earlyWarningAlert.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: "alert-manually-resolved",
+          schoolId: "school-1",
+          status: "RESOLVED",
+        },
+        data: {
+          evidence: expect.objectContaining({
+            absenceCount: 3,
+            lifecycle: {
+              riskClearedAt: expect.any(String),
+            },
+          }),
+        },
+      });
+      expect(prisma.earlyWarningAlert.create).not.toHaveBeenCalled();
+    });
+
+    it("creates a new alert when a previously cleared manual-resolution risk returns", async () => {
+      const manuallyResolvedAlert = {
+        id: "alert-manually-resolved",
+        status: "RESOLVED",
+        resolvedBy: "teacher-1",
+        evidence: {
+          absenceCount: 3,
+          lifecycle: { riskClearedAt: "2026-11-22T10:00:00.000Z" },
+        },
+      };
+
+      prisma.alertRule.findMany.mockResolvedValue([repeatedAbsenceRule]);
+      prisma.attendance.findMany.mockResolvedValue(attendanceWithRisk);
+      prisma.earlyWarningAlert.findFirst
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(manuallyResolvedAlert);
+
+      const result = await evaluateLearnerEarlyWarnings("school-1", "learner-1");
+
+      expect(prisma.earlyWarningAlert.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          alertType: "REPEATED_ABSENCES",
+          status: "ACTIVE",
+          alertRuleId: "rule-1",
+        }),
+      });
+      expect(result).toEqual([{ id: "alert-new" }]);
+    });
+
+    it("creates an academic-decline alert when the configured decline threshold is met", async () => {
       prisma.alertRule.findMany.mockResolvedValue([
-        { id: "rule-1", name: "Repeated Absences", alertType: "REPEATED_ABSENCES" },
-        { id: "rule-2", name: "Academic Decline", alertType: "ACADEMIC_DECLINE" },
+        {
+          id: "rule-academic",
+          name: "Academic Decline",
+          alertType: "ACADEMIC_DECLINE",
+          config: { minAssessments: 3, declinePercentage: 20 },
+        },
       ]);
 
-      const repeated = await evaluateLearnerEarlyWarnings("school-1", "learner-1");
-      const declined = await evaluateLearnerEarlyWarnings("school-1", "learner-1");
+      getLearnerAssessments.mockResolvedValue([
+        {
+          assessment: {
+            id: "assessment-3",
+            title: "Latest",
+            date: "2026-11-20",
+            maxScore: 100,
+          },
+          score: 50,
+        },
+        {
+          assessment: {
+            id: "assessment-2",
+            title: "Middle",
+            date: "2026-11-15",
+            maxScore: 100,
+          },
+          score: 70,
+        },
+        {
+          assessment: {
+            id: "assessment-1",
+            title: "Earliest",
+            date: "2026-11-10",
+            maxScore: 100,
+          },
+          score: 90,
+        },
+      ]);
 
-      expect(repeated).toBeDefined();
-      expect(declined).toBeDefined();
+      const result = await evaluateLearnerEarlyWarnings("school-1", "learner-1");
+
+      expect(prisma.earlyWarningAlert.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          alertType: "ACADEMIC_DECLINE",
+          status: "ACTIVE",
+          alertRuleId: "rule-academic",
+          declineThreshold: "20",
+          assessmentsCompared: 3,
+        }),
+      });
+      expect(result).toEqual([{ id: "alert-new" }]);
     });
 
     it("should handle school isolation - different schools have separate alerts", async () => {

@@ -59,6 +59,9 @@ export const bootstrapInitialAdmin = async (input) => {
     });
 
     return { school, user, membership };
+  }, {
+    maxWait: 10000,
+    timeout: 15000,
   });
 
   const token = signAccessToken({ userId: result.user.id });

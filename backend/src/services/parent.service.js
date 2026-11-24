@@ -565,6 +565,9 @@ export const activateParentInvitation = async (data) => {
       });
 
       return user;
+    }, {
+      maxWait: 10000,
+      timeout: 15000,
     });
 
     return result;

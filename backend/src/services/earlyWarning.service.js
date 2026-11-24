@@ -259,7 +259,6 @@ async function checkAcademicDecline(schoolId, learnerId, minAssessments = 3, dec
 
 
 async function evaluateLearnerEarlyWarnings(schoolId, learnerId) {
-  // Verify the learner belongs to the school
   const learner = await prisma.learner.findFirst({
     where: { schoolId, id: learnerId, isActive: true },
     select: { id: true, classId: true },
@@ -269,235 +268,322 @@ async function evaluateLearnerEarlyWarnings(schoolId, learnerId) {
     return null;
   }
 
-  // Load active alert rules for this school
   const alertRules = await prisma.alertRule.findMany({
     where: { schoolId, isActive: true },
-    orderBy: { id: 'asc' },
+    orderBy: { id: "asc" },
   });
 
   if (!alertRules.length) {
     return null;
   }
 
-  // Get the learner's classId
-  const classId = learner.classId;
-
   const createdAlerts = [];
 
   for (const rule of alertRules) {
     const config = rule.config || {};
 
-    // Prevent duplicate unresolved alert for this specific rule
     const existingAlert = await prisma.earlyWarningAlert.findFirst({
       where: {
         schoolId,
         learnerId,
         alertRuleId: rule.id,
-        status: { in: ['ACTIVE', 'ACKNOWLEDGED'] },
+        status: { in: ["ACTIVE", "ACKNOWLEDGED"] },
       },
     });
 
-    if (existingAlert) {
-      continue;
-    }
+    let riskDetected = false;
+    let alertData = null;
 
-    // Process REPEATED_ABSENCES
-    if (rule.alertType === 'REPEATED_ABSENCES') {
+    if (rule.alertType === "REPEATED_ABSENCES") {
       const absenceThreshold = config.absenceThreshold ?? 3;
       const observationPeriodDays = config.observationPeriodDays ?? 5;
 
       const attendanceRecords = await prisma.attendance.findMany({
         where: { schoolId, learnerId },
-        orderBy: { date: 'asc' },
+        orderBy: { date: "asc" },
       });
 
-      if (attendanceRecords.length < absenceThreshold) {
-        continue;
-      }
+      if (attendanceRecords.length >= absenceThreshold) {
+        const absences = attendanceRecords.filter(
+          (record) =>
+            record.status === "ABSENT" || record.status === "EXCUSED",
+        );
 
-      const absences = attendanceRecords.filter(
-        (record) => record.status === 'ABSENT' || record.status === 'EXCUSED'
-      );
+        if (absences.length >= absenceThreshold) {
+          const sortedDates = [
+            ...new Set(attendanceRecords.map((record) => record.date)),
+          ].sort((a, b) => new Date(a) - new Date(b));
 
-      if (absences.length < absenceThreshold) {
-        continue;
-      }
+          let absenceCount = absences.length;
+          let dateRangeStart;
+          let dateRangeEnd;
 
-      const sortedDates = [...new Set(attendanceRecords.map((r) => r.date))].sort((a, b) => new Date(a) - new Date(b));
-      let absenceCount = absences.length;
-      let dateRangeStart;
-      let dateRangeEnd;
+          if (config.periodType === "calendarDays") {
+            dateRangeEnd = new Date(sortedDates[sortedDates.length - 1]);
 
-      if (config.periodType === 'calendarDays') {
-        dateRangeEnd = new Date(sortedDates[sortedDates.length - 1]);
-        const calendarCutoff = new Date(dateRangeEnd.getTime() - observationPeriodDays * 24 * 60 * 60 * 1000);
-        dateRangeStart = calendarCutoff;
-        absenceCount = absences.filter((a) => new Date(a.date) >= calendarCutoff).length;
-      } else {
-        const recentRecords = attendanceRecords.slice(-observationPeriodDays);
-        absenceCount = recentRecords.filter(
-          (record) => record.status === 'ABSENT' || record.status === 'EXCUSED'
-        ).length;
-        dateRangeEnd = new Date(recentRecords[recentRecords.length - 1].date);
-        dateRangeStart = new Date(recentRecords[0].date);
-      }
+            const calendarCutoff = new Date(
+              dateRangeEnd.getTime() -
+                observationPeriodDays * 24 * 60 * 60 * 1000,
+            );
 
-      if (absenceCount < absenceThreshold) {
-        continue;
-      }
+            dateRangeStart = calendarCutoff;
+            absenceCount = absences.filter(
+              (absence) => new Date(absence.date) >= calendarCutoff,
+            ).length;
+          } else {
+            const recentRecords = attendanceRecords.slice(
+              -observationPeriodDays,
+            );
 
-      try {
-        const newAlert = await prisma.earlyWarningAlert.create({
-          data: {
-            schoolId,
-            learnerId,
-            classId,
-            alertType: 'REPEATED_ABSENCES',
-            status: 'ACTIVE',
-            alertRuleId: rule.id,
-            absencesCount: absenceCount,
-            absenceDateRange: dateRangeStart ? dateRangeStart.toISOString().split('T')[0] : null,
-            declineThreshold: null,
-            assessmentsCompared: null,
-            lastAssessmentDate: null,
-            evidence: {
-              absenceCount,
-              absenceDateRange: dateRangeStart ? dateRangeStart.toISOString() : null,
-              dateRangeEnd: dateRangeEnd ? dateRangeEnd.toISOString() : null,
-              threshold: absenceThreshold,
-              observationPeriodDays,
-            },
-          },
-        });
-        createdAlerts.push(newAlert);
-      } catch (error) {
-        if (error.code === 'P2002') {
-          const recovered = await prisma.earlyWarningAlert.findFirst({
-            where: {
-              schoolId,
-              learnerId,
-              alertRuleId: rule.id,
-              status: { in: ['ACTIVE', 'ACKNOWLEDGED'] },
-            },
-          });
-          if (recovered) {
-            createdAlerts.push(recovered);
-            continue;
+            absenceCount = recentRecords.filter(
+              (record) =>
+                record.status === "ABSENT" || record.status === "EXCUSED",
+            ).length;
+
+            dateRangeEnd = new Date(
+              recentRecords[recentRecords.length - 1].date,
+            );
+            dateRangeStart = new Date(recentRecords[0].date);
+          }
+
+          if (absenceCount >= absenceThreshold) {
+            riskDetected = true;
+
+            alertData = {
+              alertType: "REPEATED_ABSENCES",
+              absencesCount: absenceCount,
+              absenceDateRange: dateRangeStart
+                ? dateRangeStart.toISOString().split("T")[0]
+                : null,
+              declineThreshold: null,
+              assessmentsCompared: null,
+              lastAssessmentDate: null,
+              evidence: {
+                absenceCount,
+                absenceDateRange: dateRangeStart
+                  ? dateRangeStart.toISOString()
+                  : null,
+                dateRangeEnd: dateRangeEnd
+                  ? dateRangeEnd.toISOString()
+                  : null,
+                threshold: absenceThreshold,
+                observationPeriodDays,
+              },
+            };
           }
         }
-        console.error('[EarlyWarning] REPEATED_ABSENCES alert failed for school ' + schoolId + ', learner ' + learnerId + ', rule ' + rule.id + ': ' + error.message);
-        throw error;
       }
     }
 
-    if (rule.alertType === 'ACADEMIC_DECLINE') {
+    if (rule.alertType === "ACADEMIC_DECLINE") {
       const minAssessments = config.minAssessments ?? 3;
       const declinePercentage = config.declinePercentage ?? 20;
 
-      const learnerAssessments = await getLearnerAssessments(schoolId, learnerId);
+      const learnerAssessments = await getLearnerAssessments(
+        schoolId,
+        learnerId,
+      );
 
-      if (learnerAssessments.length < minAssessments) {
-        continue;
-      }
+      if (learnerAssessments.length >= minAssessments) {
+        const recentAssessments = learnerAssessments
+          .slice(0, minAssessments)
+          .map((result) => {
+            const assessment = result.assessment;
 
-      const recentAssessments = learnerAssessments.slice(0, minAssessments);
+            const percentage =
+              assessment.maxScore > 0
+                ? (result.score / assessment.maxScore) * 100
+                : 0;
 
-      const scoresWithPercentage = recentAssessments.map((result) => {
-        const assessment = result.assessment;
-        const percentage = assessment.maxScore > 0 ? (result.score / assessment.maxScore) * 100 : 0;
-        return {
-          assessmentId: assessment.id,
-          assessmentTitle: assessment.title,
-          date: assessment.date,
-          score: result.score,
-          maxScore: assessment.maxScore,
-          percentage,
-        };
-      }).sort((a, b) => new Date(a.date) - new Date(b.date));
+            return {
+              assessmentId: assessment.id,
+              assessmentTitle: assessment.title,
+              date: assessment.date,
+              score: result.score,
+              maxScore: assessment.maxScore,
+              percentage,
+            };
+          })
+          .sort((a, b) => new Date(a.date) - new Date(b.date));
 
-      if (scoresWithPercentage.length < 2) {
-        continue;
-      }
+        if (recentAssessments.length >= 2) {
+          const firstScore = recentAssessments[0];
+          const lastScore =
+            recentAssessments[recentAssessments.length - 1];
 
-      const firstScore = scoresWithPercentage[0];
-      const lastScore = scoresWithPercentage[scoresWithPercentage.length - 1];
+          if (
+            firstScore.percentage > 0 &&
+            lastScore.percentage > 0 &&
+            firstScore.percentage - lastScore.percentage >=
+              declinePercentage
+          ) {
+            riskDetected = true;
 
-      let declineFound = false;
-      let declineDetails = null;
-
-      if (firstScore.percentage > 0 && lastScore.percentage > 0) {
-        const decline = firstScore.percentage - lastScore.percentage;
-        if (decline >= declinePercentage) {
-          declineFound = true;
-          declineDetails = {
-            firstAssessment: {
-              title: firstScore.assessmentTitle,
-              date: firstScore.date,
-              score: firstScore.score,
-              maxScore: firstScore.maxScore,
-              percentage: Math.round(firstScore.percentage),
-            },
-            lastAssessment: {
-              title: lastScore.assessmentTitle,
-              date: lastScore.date,
-              score: lastScore.score,
-              maxScore: lastScore.maxScore,
-              percentage: Math.round(lastScore.percentage),
-            },
-            declinePercentage: Math.round(firstScore.percentage - lastScore.percentage),
-          };
-        }
-      }
-
-      if (!declineFound) {
-        continue;
-      }
-
-      try {
-        const newAlert = await prisma.earlyWarningAlert.create({
-          data: {
-            schoolId,
-            learnerId,
-            classId,
-            alertType: 'ACADEMIC_DECLINE',
-            status: 'ACTIVE',
-            alertRuleId: rule.id,
-            absencesCount: null,
-            absenceDateRange: null,
-            declineThreshold: String(declinePercentage),
-            assessmentsCompared: scoresWithPercentage.length,
-            lastAssessmentDate: lastScore.date,
-            evidence: {
-              assessmentsCompared: scoresWithPercentage.length,
-              declineThreshold: declinePercentage,
-              firstAssessment: declineDetails.firstAssessment,
-              lastAssessment: declineDetails.lastAssessment,
-            },
-          },
-        });
-        createdAlerts.push(newAlert);
-      } catch (error) {
-        if (error.code === 'P2002') {
-          const recovered = await prisma.earlyWarningAlert.findFirst({
-            where: {
-              schoolId,
-              learnerId,
-              alertRuleId: rule.id,
-              status: { in: ['ACTIVE', 'ACKNOWLEDGED'] },
-            },
-          });
-          if (recovered) {
-            createdAlerts.push(recovered);
-            continue;
+            alertData = {
+              alertType: "ACADEMIC_DECLINE",
+              absencesCount: null,
+              absenceDateRange: null,
+              declineThreshold: String(declinePercentage),
+              assessmentsCompared: recentAssessments.length,
+              lastAssessmentDate: lastScore.date,
+              evidence: {
+                assessmentsCompared: recentAssessments.length,
+                declineThreshold: declinePercentage,
+                firstAssessment: {
+                  title: firstScore.assessmentTitle,
+                  date: firstScore.date,
+                  score: firstScore.score,
+                  maxScore: firstScore.maxScore,
+                  percentage: Math.round(firstScore.percentage),
+                },
+                lastAssessment: {
+                  title: lastScore.assessmentTitle,
+                  date: lastScore.date,
+                  score: lastScore.score,
+                  maxScore: lastScore.maxScore,
+                  percentage: Math.round(lastScore.percentage),
+                },
+              },
+            };
           }
         }
-        console.error('[EarlyWarning] ACADEMIC_DECLINE alert failed for school ' + schoolId + ', learner ' + learnerId + ', rule ' + rule.id + ': ' + error.message);
-        throw error;
       }
+    }
+
+    // An unresolved alert remains unchanged while its risk persists.
+    if (existingAlert && riskDetected) {
+      continue;
+    }
+
+    // Automatically resolve an unresolved alert when its risk clears.
+    if (existingAlert && !riskDetected) {
+      const now = new Date();
+
+      await prisma.$transaction(async (tx) => {
+        const updateResult = await tx.earlyWarningAlert.updateMany({
+          where: {
+            id: existingAlert.id,
+            schoolId,
+            status: existingAlert.status,
+          },
+          data: {
+            status: "RESOLVED",
+            resolvedBy: null,
+            resolvedAt: now,
+          },
+        });
+
+        if (updateResult.count !== 1) {
+          return;
+        }
+
+        await tx.alertStatusHistory.create({
+          data: {
+            alertId: existingAlert.id,
+            schoolId,
+            fromStatus: existingAlert.status,
+            toStatus: "RESOLVED",
+            changedBy: null,
+          },
+        });
+      });
+
+      continue;
+    }
+
+    // Find the most recent manually resolved alert for this rule.
+    const manuallyResolvedAlert =
+      await prisma.earlyWarningAlert.findFirst({
+        where: {
+          schoolId,
+          learnerId,
+          alertRuleId: rule.id,
+          status: "RESOLVED",
+          resolvedBy: { not: null },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+    if (!riskDetected) {
+      // Record that the manually resolved risk has now cleared.
+      if (manuallyResolvedAlert) {
+        const evidence =
+          manuallyResolvedAlert.evidence &&
+          typeof manuallyResolvedAlert.evidence === "object" &&
+          !Array.isArray(manuallyResolvedAlert.evidence)
+            ? manuallyResolvedAlert.evidence
+            : {};
+
+        const lifecycle =
+          evidence.lifecycle &&
+          typeof evidence.lifecycle === "object" &&
+          !Array.isArray(evidence.lifecycle)
+            ? evidence.lifecycle
+            : {};
+
+        if (!lifecycle.riskClearedAt) {
+          await prisma.earlyWarningAlert.updateMany({
+            where: {
+              id: manuallyResolvedAlert.id,
+              schoolId,
+              status: "RESOLVED",
+            },
+            data: {
+              evidence: {
+                ...evidence,
+                lifecycle: {
+                  ...lifecycle,
+                  riskClearedAt: new Date().toISOString(),
+                },
+              },
+            },
+          });
+        }
+      }
+
+      continue;
+    }
+
+    // A manual resolution suppresses recreation until the risk is observed
+    // to have cleared. A previously recorded clear permits a new alert.
+    if (manuallyResolvedAlert) {
+      const evidence = manuallyResolvedAlert.evidence || {};
+      const riskWasCleared = Boolean(
+        evidence.lifecycle?.riskClearedAt,
+      );
+
+      if (!riskWasCleared) {
+        continue;
+      }
+    }
+
+    try {
+      const newAlert = await prisma.earlyWarningAlert.create({
+        data: {
+          schoolId,
+          learnerId,
+          classId: learner.classId,
+          alertType: alertData.alertType,
+          status: "ACTIVE",
+          alertRuleId: rule.id,
+          absencesCount: alertData.absencesCount,
+          absenceDateRange: alertData.absenceDateRange,
+          declineThreshold: alertData.declineThreshold,
+          assessmentsCompared: alertData.assessmentsCompared,
+          lastAssessmentDate: alertData.lastAssessmentDate,
+          evidence: alertData.evidence,
+        },
+      });
+
+      createdAlerts.push(newAlert);
+    } catch (error) {
+      console.error(
+        `[EarlyWarning] ${rule.alertType} alert failed for school ${schoolId}, learner ${learnerId}, rule ${rule.id}: ${error.message}`,
+      );
+      throw error;
     }
   }
 
   return createdAlerts.length ? createdAlerts : null;
 }
-
 export { checkRepeatedAbsences, checkAcademicDecline, evaluateLearnerEarlyWarnings };
