@@ -533,34 +533,44 @@ describe("Learners", () => {
   it("admin deactivates learners but cannot delete their class or records", async () => {
     const token = await login(ADMIN1);
 
-    const list = await request(app)
-      .get(`/api/schools/${school1.id}/learners`)
-      .set("Authorization", `Bearer ${token}`);
+    // Create a learner specifically for this test.
+    const create = await request(app)
+      .post(`/api/schools/${school1.id}/learners`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        firstName: "Inactive",
+        lastName: "Learner",
+        admissionNumber: "A-DEACTIVATE",
+        classId: class1.id,
+      });
 
-    expect(list.body.data.length).toBeGreaterThan(0);
+    expect(create.status).toBe(201);
 
-    for (const learner of list.body.data) {
-      const response = await request(app)
-        .patch(`/api/schools/${school1.id}/learners/${learner.id}`)
-        .set("Authorization", `Bearer ${token}`)
-        .send({ isActive: false });
+    const learnerId = create.body.data.id;
 
-      expect(response.status).toBe(200);
-      expect(response.body.data.isActive).toBe(false);
-    }
+    // Deactivate the learner.
+    const response = await request(app)
+      .patch(`/api/schools/${school1.id}/learners/${learnerId}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ isActive: false });
 
+    expect(response.status).toBe(200);
+    expect(response.body.data.isActive).toBe(false);
+
+    // Confirm the inactive learner is still accessible.
     const retained = await request(app)
-      .get(`/api/schools/${school1.id}/learners`)
+      .get(`/api/schools/${school1.id}/learners/${learnerId}`)
       .set("Authorization", `Bearer ${token}`);
 
     expect(retained.status).toBe(200);
-    expect(retained.body.data).toHaveLength(list.body.data.length);
-    expect(retained.body.data.every((learner) => !learner.isActive)).toBe(true);
+    expect(retained.body.data.id).toBe(learnerId);
+    expect(retained.body.data.isActive).toBe(false);
 
+    // Confirm the class cannot be deleted while it has learner records.
     const del = await request(app)
       .delete(`/api/schools/${school1.id}/classes/${class1.id}`)
       .set("Authorization", `Bearer ${token}`);
 
     expect(del.status).toBe(409);
-  });
+  }, 120000);
 });

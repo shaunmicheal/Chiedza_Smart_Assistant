@@ -147,6 +147,9 @@ export const updateLearner = async (schoolId, learnerId, data) => {
         });
 
         return learner;
+      }, {
+        maxWait: 10000,
+        timeout: 20000,
       });
     }
 

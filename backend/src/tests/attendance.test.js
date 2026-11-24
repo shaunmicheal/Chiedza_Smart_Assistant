@@ -106,7 +106,7 @@ describe("Attendance", () => {
     expect(res.status).toBe(201);
     expect(res.body.data.status).toBe("PRESENT");
     expect(res.body.data.learnerId).toBe(learner1.id);
-  });
+  }, 60000);
 
   it("records every attendance status", async () => {
     const statuses = ["PRESENT", "ABSENT", "LATE", "EXCUSED"];

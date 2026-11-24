@@ -59,12 +59,9 @@ export const removeTeacherFromClassSchema = z.object({
 export const createParentSchema = z.object({
   params: z.object({ schoolId: idParam }),
   body: z.object({
-    firstName: z.string().min(1).max(60),
-    lastName: z.string().min(1).max(60),
-    email: z.string().email().max(254),
-    phone: z.string().max(30).optional(),
+    email: z.string().trim().email().max(254),
     learnerId: idParam,
-    relationship: z.string().min(2).max(40),
+    relationship: z.string().trim().min(2).max(40),
   }),
 });
 
@@ -166,8 +163,7 @@ export const activateParentInvitationSchema = z.object({
   body: z.object({
     firstName: z.string().trim().min(1).max(60),
     lastName: z.string().trim().min(1).max(60),
-    email: z.string().trim().email().max(254),
-    invitationCode: z.string().trim().min(20).max(200),
+    token: z.string().trim().min(20).max(200),
     password: z.string().min(8).max(128),
   }),
 });

@@ -18,8 +18,6 @@ const safeUserSelect = {
   mustChangePassword: true,
 };
 
-const createTemporaryPassword = () =>
-  `${randomBytes(12).toString("base64url")}A1!`;
 
 export const listParents = async (schoolId) => {
   const links = await prisma.parentLearner.findMany({
@@ -92,100 +90,51 @@ export const createParent = async (schoolId, data) => {
     },
   });
 
-  if (existingUser) {
-    const schoolMembership = existingUser.memberships[0];
-
-    if (!schoolMembership || schoolMembership.role !== "PARENT") {
-      throw makeError(
-        "This email already belongs to an account that is not a parent in this school.",
-        409
-      );
-    }
-
-    if (existingUser.parentLinks.length > 0) {
-      throw makeError(
-        "This parent is already linked to the selected learner.",
-        409
-      );
-    }
-
-    const link = await prisma.parentLearner.create({
-      data: {
-        learnerId: data.learnerId,
-        guardianUserId: existingUser.id,
-        relationship: data.relationship,
-        status: "VERIFIED",
-        verifiedAt: new Date(),
-      },
-    });
-
-    return {
-      parent: {
-        id: existingUser.id,
-        firstName: existingUser.firstName,
-        lastName: existingUser.lastName,
-        email: existingUser.email,
-        phone: existingUser.phone,
-      },
-      link,
-      accountCreated: false,
-      tempPassword: null,
-    };
+  if (!existingUser) {
+    throw makeError(
+      "No parent account exists for this email. Use Invite Parent to create an activation link.",
+      404
+    );
   }
 
-  const tempPassword = createTemporaryPassword();
-  const passwordHash = await hashPassword(tempPassword);
+  const schoolMembership = existingUser.memberships[0];
 
-  try {
-    const result = await prisma.$transaction(async (tx) => {
-      const user = await tx.user.create({
-        data: {
-          firstName: data.firstName.trim(),
-          lastName: data.lastName.trim(),
-          email,
-          phone: data.phone?.trim() || null,
-          passwordHash,
-          mustChangePassword: true,
-        },
-        select: safeUserSelect,
-      });
-
-      await tx.schoolMembership.create({
-        data: {
-          schoolId,
-          userId: user.id,
-          role: "PARENT",
-        },
-      });
-
-      const link = await tx.parentLearner.create({
-        data: {
-          learnerId: data.learnerId,
-          guardianUserId: user.id,
-          relationship: data.relationship,
-          status: "VERIFIED",
-          verifiedAt: new Date(),
-        },
-      });
-
-      return { user, link };
-    });
-
-    return {
-      parent: result.user,
-      link: result.link,
-      accountCreated: true,
-      tempPassword,
-    };
-  } catch (error) {
-    if (error.code === "P2002") {
-      throw makeError(
-        "An account with this email already exists. Refresh the parent list and try again.",
-        409
-      );
-    }
-    throw error;
+  if (!schoolMembership || schoolMembership.role !== "PARENT") {
+    throw makeError(
+      "This email already belongs to an account that is not a parent in this school.",
+      409
+    );
   }
+
+  if (existingUser.parentLinks.length > 0) {
+    throw makeError(
+      "This parent is already linked to the selected learner.",
+      409
+    );
+  }
+
+  const link = await prisma.parentLearner.create({
+    data: {
+      learnerId: data.learnerId,
+      guardianUserId: existingUser.id,
+      relationship: data.relationship,
+      status: "VERIFIED",
+      verifiedAt: new Date(),
+    },
+  });
+
+  return {
+    parent: {
+      id: existingUser.id,
+      firstName: existingUser.firstName,
+      lastName: existingUser.lastName,
+      email: existingUser.email,
+      phone: existingUser.phone,
+    },
+    link,
+    accountCreated: false,
+    tempPassword: null,
+  };
 };
 
 const getLinkedLearnerIds = async (guardianUserId) => {
@@ -345,8 +294,8 @@ export const createParentInvitation = async (
     );
   }
 
-  const invitationCode = randomBytes(24).toString("base64url");
-  const tokenHash = hashInvitationCode(invitationCode);
+  const token = randomBytes(24).toString("base64url");
+  const tokenHash = hashInvitationCode(token);
   const expiresAt = new Date(Date.now() + INVITATION_VALIDITY_MS);
 
   const invitation = await prisma.parentInvitation.create({
@@ -375,8 +324,15 @@ export const createParentInvitation = async (
     },
   });
 
-  // The plaintext code is returned only at creation and is never stored.
-  return { invitation, invitationCode };
+  const clientUrl = (
+    process.env.CLIENT_URL || "http://localhost:5173"
+  ).replace(/\/+$/, "");
+
+  // The token is returned only inside this activation URL.
+  // Only its SHA-256 hash is stored in the database.
+  const activationUrl = `${clientUrl}/activate#token=${encodeURIComponent(token)}`;
+
+  return { invitation, activationUrl };
 };
 
 export const listParentInvitations = async (schoolId) => {
@@ -451,9 +407,8 @@ export const revokeParentInvitation = async (schoolId, invitationId) => {
 };
 
 export const activateParentInvitation = async (data) => {
-  const email = data.email.trim().toLowerCase();
-  const invitationCode = data.invitationCode.trim();
-  const tokenHash = hashInvitationCode(invitationCode);
+  const token = data.token.trim();
+  const tokenHash = hashInvitationCode(token);
   const now = new Date();
 
   const invitation = await prisma.parentInvitation.findUnique({
@@ -469,11 +424,14 @@ export const activateParentInvitation = async (data) => {
   });
 
   if (!invitation) {
-    throw makeError("The invitation code is invalid.", 400);
+    throw makeError("This activation link is invalid.", 400);
   }
 
   if (invitation.status !== "PENDING") {
-    throw makeError("This invitation has already been used or is no longer active.", 409);
+    throw makeError(
+      "This invitation has already been used or is no longer active.",
+      409
+    );
   }
 
   if (invitation.expiresAt <= now) {
@@ -481,11 +439,20 @@ export const activateParentInvitation = async (data) => {
       where: { id: invitation.id, status: "PENDING" },
       data: { status: "EXPIRED" },
     });
-    throw makeError("This invitation has expired. Please contact your school.", 410);
+
+    throw makeError(
+      "This activation link has expired. Please contact your school.",
+      410
+    );
   }
 
-  if (!invitation.invitedEmail || invitation.invitedEmail !== email) {
-    throw makeError("The email address does not match this invitation.", 403);
+  const email = invitation.invitedEmail;
+
+  if (!email) {
+    throw makeError(
+      "This invitation has no valid email address. Please contact your school.",
+      409
+    );
   }
 
   const existingUser = await prisma.user.findUnique({
@@ -504,7 +471,6 @@ export const activateParentInvitation = async (data) => {
 
   try {
     const result = await prisma.$transaction(async (tx) => {
-      // Claim the invitation first. A concurrent activation can claim it only once.
       const claimed = await tx.parentInvitation.updateMany({
         where: {
           id: invitation.id,
@@ -532,7 +498,10 @@ export const activateParentInvitation = async (data) => {
       });
 
       if (!learner) {
-        throw makeError("The learner linked to this invitation is no longer active.", 409);
+        throw makeError(
+          "The learner linked to this invitation is no longer active.",
+          409
+        );
       }
 
       const user = await tx.user.create({

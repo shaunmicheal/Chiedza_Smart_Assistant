@@ -271,50 +271,51 @@ describe("Parent account management", () => {
     expect(response.status).toBe(403);
   });
 
-  it("allows the school admin to create a parent and returns a temporary password once", async () => {
+  it("links an existing parent account to a learner", async () => {
+    const passwordHash = await hashPassword(PASSWORD);
+    const user = await prisma.user.create({
+      data: {
+        firstName: "Alice",
+        lastName: "Guardian",
+        email: EMAILS.parent1,
+        passwordHash,
+        mustChangePassword: false,
+      },
+    });
+
+    await prisma.schoolMembership.create({
+      data: { schoolId: school.id, userId: user.id, role: "PARENT" },
+    });
+
     const response = await createParent(adminToken, {
-      firstName: "Alice",
-      lastName: "Guardian",
       email: EMAILS.parent1,
-      phone: "+263771000001",
       learnerId: learners[0].id,
       relationship: "Mother",
     });
 
     expect(response.status).toBe(201);
-    expect(response.body.data.accountCreated).toBe(true);
-    expect(response.body.data.tempPassword).toBeTruthy();
+    expect(response.body.data.accountCreated).toBe(false);
+    expect(response.body.data.tempPassword).toBeNull();
     expect(response.body.data.parent.email).toBe(EMAILS.parent1);
-    expect(response.body.data.parent.mustChangePassword).toBe(true);
     expect(response.body.data.parent.passwordHash).toBeUndefined();
 
     parent1 = response.body.data;
+    parent1Token = await login(EMAILS.parent1);
+  });
 
-    parent1Token = await login(
-      EMAILS.parent1,
-      parent1.tempPassword
-    );
-
-    const blocked = await request(app)
-      .get("/api/parent/children")
-      .set("Authorization", `Bearer ${parent1Token}`);
-
-    expect(blocked.status).toBe(403);
-    expect(blocked.body.code || blocked.body.error?.code || blocked.body.message)
-      .toBeTruthy();
-
-    // Simulate the completed password change here. The password-change
-    // endpoint itself is covered by the existing authentication test suite.
-    await prisma.user.update({
-      where: { email: EMAILS.parent1 },
-      data: { mustChangePassword: false },
+  it("rejects linking a parent email that has no existing account", async () => {
+    const response = await createParent(adminToken, {
+      email: "new-parent@test.chiedza.local",
+      learnerId: learners[0].id,
+      relationship: "Mother",
     });
+
+    expect(response.status).toBe(404);
+    expect(response.body.message).toContain("Invite Parent");
   });
 
   it("links an additional child to an existing parent without issuing another password", async () => {
     const response = await createParent(adminToken, {
-      firstName: "Alice",
-      lastName: "Guardian",
       email: EMAILS.parent1,
       learnerId: learners[2].id,
       relationship: "Mother",
@@ -328,8 +329,6 @@ describe("Parent account management", () => {
 
   it("rejects a duplicate parent-child link", async () => {
     const response = await createParent(adminToken, {
-      firstName: "Alice",
-      lastName: "Guardian",
       email: EMAILS.parent1,
       learnerId: learners[0].id,
       relationship: "Mother",
@@ -365,8 +364,6 @@ describe("Parent account management", () => {
     });
 
     const response = await createParent(adminToken, {
-      firstName: "Outside",
-      lastName: "Guardian",
       email: "outside-parent@test.chiedza.local",
       learnerId: otherLearner.id,
       relationship: "Guardian",
@@ -391,26 +388,35 @@ describe("Parent account management", () => {
 });
 
 describe("Parent portal data access", () => {
-  it("creates a second parent account for another learner", async () => {
+  it("links a second existing parent account to another learner", async () => {
+    const passwordHash = await hashPassword(PASSWORD);
+    const user = await prisma.user.create({
+      data: {
+        firstName: "Brian",
+        lastName: "Guardian",
+        email: EMAILS.parent2,
+        passwordHash,
+        mustChangePassword: false,
+      },
+    });
+
+    await prisma.schoolMembership.create({
+      data: { schoolId: school.id, userId: user.id, role: "PARENT" },
+    });
+
     const response = await createParent(adminToken, {
-      firstName: "Brian",
-      lastName: "Guardian",
       email: EMAILS.parent2,
       learnerId: learners[1].id,
       relationship: "Father",
     });
 
     expect(response.status).toBe(201);
-    expect(response.body.data.accountCreated).toBe(true);
-    expect(response.body.data.tempPassword).toBeTruthy();
+    expect(response.body.data.accountCreated).toBe(false);
+    expect(response.body.data.tempPassword).toBeNull();
+    expect(response.body.data.parent.email).toBe(EMAILS.parent2);
 
     parent2 = response.body.data;
-    parent2Token = await login(EMAILS.parent2, parent2.tempPassword);
-
-    await prisma.user.update({
-      where: { email: EMAILS.parent2 },
-      data: { mustChangePassword: false },
-    });
+    parent2Token = await login(EMAILS.parent2);
   });
 
   it("returns only the authenticated parent's linked children", async () => {
@@ -546,7 +552,7 @@ describe("Parent portal data access", () => {
 
 
 describe("Parent invitation activation", () => {
-  let invitationCode;
+  let invitationToken;
   let invitationId;
 
   const createInvitation = (token, email, learnerId = learners[0].id) =>
@@ -555,15 +561,29 @@ describe("Parent invitation activation", () => {
       .set("Authorization", `Bearer ${token}`)
       .send({ email, learnerId });
 
-  const activateInvitation = (email, code) =>
+  const extractActivationToken = (response) => {
+    const activationUrl = new URL(response.body.data.activationUrl);
+
+    expect(activationUrl.pathname).toBe("/activate");
+    expect(activationUrl.search).toBe("");
+
+    const token = new URLSearchParams(
+      activationUrl.hash.slice(1)
+    ).get("token");
+
+    expect(token).toBeTruthy();
+    return token;
+  };
+
+  const activateInvitation = (token, extraData = {}) =>
     request(app)
       .post("/api/parent-invitations/activate")
       .send({
         firstName: "Invited",
         lastName: "Guardian",
-        email,
-        invitationCode: code,
+        token,
         password: "SecureParentPass123!",
+        ...extraData,
       });
 
   it("prevents teachers from issuing parent invitations", async () => {
@@ -575,7 +595,7 @@ describe("Parent invitation activation", () => {
     expect(response.status).toBe(403);
   });
 
-  it("allows an administrator to issue an invitation and stores only its hash", async () => {
+  it("allows an administrator to issue an activation link and stores only its hash", async () => {
     const response = await createInvitation(
       adminToken,
       EMAILS.invitation1
@@ -588,10 +608,11 @@ describe("Parent invitation activation", () => {
     );
     expect(response.body.data.invitation.status).toBe("PENDING");
 
-    invitationCode = response.body.data.invitationCode;
+    invitationToken = extractActivationToken(response);
     invitationId = response.body.data.invitation.id;
 
-    expect(invitationCode).toBeTruthy();
+    expect(response.body.data.activationUrl).toBeTruthy();
+    expect(response.body.data.invitationCode).toBeUndefined();
     expect(response.body.data.invitation.tokenHash).toBeUndefined();
 
     const storedInvitation = await prisma.parentInvitation.findUnique({
@@ -599,9 +620,9 @@ describe("Parent invitation activation", () => {
     });
 
     expect(storedInvitation.tokenHash).toBe(
-      createHash("sha256").update(invitationCode).digest("hex")
+      createHash("sha256").update(invitationToken).digest("hex")
     );
-    expect(storedInvitation.tokenHash).not.toBe(invitationCode);
+    expect(storedInvitation.tokenHash).not.toBe(invitationToken);
 
     const validity = storedInvitation.expiresAt.getTime() - Date.now();
     expect(validity).toBeGreaterThan(47 * 60 * 60 * 1000);
@@ -624,24 +645,17 @@ describe("Parent invitation activation", () => {
     expect(listed.tokenHash).toBeUndefined();
   });
 
-  it("rejects an invitation used with the wrong email", async () => {
-    const response = await activateInvitation(
-      EMAILS.invitation2,
-      invitationCode
-    );
-
-    expect(response.status).toBe(403);
-  });
-
-  it("activates the invited parent and creates a verified learner link", async () => {
-    const response = await activateInvitation(
-      EMAILS.invitation1,
-      invitationCode
-    );
+  it("activates the invited parent using the invitation email, not a submitted email", async () => {
+    const response = await activateInvitation(invitationToken, {
+      email: "attacker@test.chiedza.local",
+    });
 
     expect(response.status).toBe(201);
     expect(response.body.success).toBe(true);
     expect(response.body.data.email).toBe(EMAILS.invitation1);
+    expect(response.body.data.email).not.toBe(
+      "attacker@test.chiedza.local"
+    );
     expect(response.body.data.mustChangePassword).toBe(false);
     expect(response.body.data.passwordHash).toBeUndefined();
 
@@ -690,18 +704,14 @@ describe("Parent invitation activation", () => {
   });
 
   it("rejects reuse of an accepted invitation", async () => {
-    const response = await activateInvitation(
-      EMAILS.invitation1,
-      invitationCode
-    );
+    const response = await activateInvitation(invitationToken);
 
     expect(response.status).toBe(409);
   });
 
-  it("rejects an invalid invitation code", async () => {
+  it("rejects an invalid activation token", async () => {
     const response = await activateInvitation(
-      EMAILS.invitation2,
-      "invalid-invitation-code-that-is-long-enough"
+      "invalid-invitation-token-that-is-long-enough"
     );
 
     expect(response.status).toBe(400);
@@ -717,7 +727,7 @@ describe("Parent invitation activation", () => {
     expect(created.status).toBe(201);
 
     const id = created.body.data.invitation.id;
-    const code = created.body.data.invitationCode;
+    const token = extractActivationToken(created);
 
     const revoked = await request(app)
       .delete(`/api/schools/${school.id}/parent-invitations/${id}`)
@@ -726,10 +736,7 @@ describe("Parent invitation activation", () => {
     expect(revoked.status).toBe(200);
     expect(revoked.body.data.status).toBe("REVOKED");
 
-    const activation = await activateInvitation(
-      EMAILS.invitation2,
-      code
-    );
+    const activation = await activateInvitation(token);
 
     expect(activation.status).toBe(409);
   });
@@ -744,8 +751,8 @@ describe("Parent invitation activation", () => {
 
     expect(created.status).toBe(201);
 
-    const invitationId = created.body.data.invitation.id;
-    const code = created.body.data.invitationCode;
+    const id = created.body.data.invitation.id;
+    const token = extractActivationToken(created);
 
     try {
       const deactivated = await request(app)
@@ -757,14 +764,13 @@ describe("Parent invitation activation", () => {
       expect(deactivated.body.data.isActive).toBe(false);
 
       const storedInvitation = await prisma.parentInvitation.findUnique({
-        where: { id: invitationId },
+        where: { id },
       });
+
       expect(storedInvitation.status).toBe("REVOKED");
 
-      const activation = await activateInvitation(
-        EMAILS.invitation3,
-        code
-      );
+      const activation = await activateInvitation(token);
+
       expect(activation.status).toBe(409);
     } finally {
       await prisma.learner.update({
@@ -784,17 +790,14 @@ describe("Parent invitation activation", () => {
     expect(created.status).toBe(201);
 
     const id = created.body.data.invitation.id;
-    const code = created.body.data.invitationCode;
+    const token = extractActivationToken(created);
 
     await prisma.parentInvitation.update({
       where: { id },
       data: { expiresAt: new Date(Date.now() - 60 * 1000) },
     });
 
-    const activation = await activateInvitation(
-      EMAILS.invitation3,
-      code
-    );
+    const activation = await activateInvitation(token);
 
     expect(activation.status).toBe(410);
 
