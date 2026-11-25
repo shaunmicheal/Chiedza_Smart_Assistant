@@ -28,7 +28,9 @@ const ChildrenPage = lazy(() => import('../pages/parent/ChildrenPage'))
 const ParentAttendancePage = lazy(() => import('../pages/parent/AttendancePage'))
 const ProgressPage = lazy(() => import('../pages/parent/ProgressPage'))
 const MessagesPage = lazy(() => import('../pages/parent/MessagesPage'))
-const NotificationsPage = lazy(() => import('../pages/parent/NotificationsPage'))
+const ParentNotificationsPage = lazy(() => import('../pages/parent/NotificationsPage'))
+const AdminNotificationsPage = lazy(() => import('../pages/admin/NotificationsPage'))
+const TeacherNotificationsPage = lazy(() => import('../pages/teacher/NotificationsPage'))
 const LoginPage = lazy(() => import('../pages/auth/LoginPage'))
 const ActivationPage = lazy(() => import('../pages/auth/ActivationPage'))
 const PasswordChangePage = lazy(() => import('../pages/auth/PasswordChangePage'))
@@ -59,7 +61,9 @@ const routePages = {
   '/teacher/classes': [TeacherClassesPage],
   '/teacher/learners': [DirectoryPage, { kind: 'learners' }],
   '/admin/early-warnings': [EarlyWarningsPage],
+  '/admin/notifications': [AdminNotificationsPage],
   '/teacher/early-warnings': [EarlyWarningsPage],
+  '/teacher/notifications': [TeacherNotificationsPage],
   '/admin/attendance': [AttendancePage],
   '/teacher/attendance': [AttendancePage],
   '/admin/assessments': [AssessmentsPage],
@@ -74,7 +78,7 @@ const routePages = {
   '/parent/attendance': [ParentAttendancePage],
   '/parent/progress': [ProgressPage],
   '/parent/messages': [MessagesPage],
-  '/parent/notifications': [NotificationsPage],
+  '/parent/notifications': [ParentNotificationsPage],
 }
 
 function roleRoutes(role, Layout) {

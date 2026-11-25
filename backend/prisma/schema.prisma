@@ -13,6 +13,12 @@ enum UserRole {
   PARENT
 }
 
+enum NotificationPriority {
+  NORMAL
+  IMPORTANT
+  URGENT
+}
+
 enum AlertStatus {
   ACTIVE
   ACKNOWLEDGED
@@ -62,19 +68,20 @@ model School {
   earlyWarningAlerts   EarlyWarningAlert[]
   alertStatusHistories AlertStatusHistory[]
   communicationDrafts  ParentCommunicationDraft[]
+  notifications        SchoolNotification[]
 }
 
 model User {
-  id           String   @id @default(cuid())
-  firstName    String
-  lastName     String
-  email        String   @unique
-  phone        String?
-  passwordHash String
-  isActive     Boolean  @default(true)
-  mustChangePassword Boolean @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  firstName          String
+  lastName           String
+  email              String   @unique
+  phone              String?
+  passwordHash       String
+  isActive           Boolean  @default(true)
+  mustChangePassword Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   memberships                SchoolMembership[]
   parentLinks                ParentLearner[]
@@ -93,10 +100,12 @@ model SchoolMembership {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
-  school          School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  invitationsSent ParentInvitation[] @relation("InvitationCreator")
-  classTeachers   ClassTeacher[]
+  school                 School                  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  user                   User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invitationsSent        ParentInvitation[]      @relation("InvitationCreator")
+  classTeachers          ClassTeacher[]
+  createdNotifications   SchoolNotification[]    @relation("NotificationCreator")
+  notificationRecipients NotificationRecipient[] @relation("NotificationRecipientMembership")
 
   @@unique([schoolId, userId])
   @@unique([schoolId, id])
@@ -357,4 +366,39 @@ model AlertStatusHistory {
 
   @@index([alertId])
   @@index([changedAt])
+}
+
+model SchoolNotification {
+  id                    String               @id @default(cuid())
+  schoolId              String
+  createdByMembershipId String
+  title                 String
+  message               String
+  priority              NotificationPriority @default(NORMAL)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  school     School                  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  createdBy  SchoolMembership        @relation("NotificationCreator", fields: [schoolId, createdByMembershipId], references: [schoolId, id], onDelete: Cascade)
+  recipients NotificationRecipient[]
+
+  @@unique([schoolId, id])
+  @@index([schoolId, createdAt])
+  @@index([createdByMembershipId])
+}
+
+model NotificationRecipient {
+  id             String    @id @default(cuid())
+  schoolId       String
+  notificationId String
+  membershipId   String
+  readAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  notification SchoolNotification @relation(fields: [schoolId, notificationId], references: [schoolId, id], onDelete: Cascade)
+  membership   SchoolMembership   @relation("NotificationRecipientMembership", fields: [schoolId, membershipId], references: [schoolId, id], onDelete: Cascade)
+
+  @@unique([notificationId, membershipId])
+  @@index([schoolId, membershipId, readAt])
+  @@index([notificationId])
 }

@@ -19,7 +19,7 @@ export const roleNavigation = {
     label: 'Administrator',
     basePath: '/admin',
     overviewPath: '/admin/overview',
-    notificationsPath: '/admin/early-warnings',
+    notificationsPath: '/admin/notifications',
     settingsPath: '/admin/settings',
     sections: [
       {
@@ -38,6 +38,7 @@ export const roleNavigation = {
         label: 'Support',
         items: [
           { title: 'Early warnings', path: '/admin/early-warnings', icon: ShieldCheck },
+          { title: 'Notifications', path: '/admin/notifications', icon: Bell },
           { title: 'Parent communication', path: '/admin/parent-communication', icon: MessageSquareText },
         ],
       },
@@ -54,7 +55,7 @@ export const roleNavigation = {
     label: 'Teacher',
     basePath: '/teacher',
     overviewPath: '/teacher/overview',
-    notificationsPath: '/teacher/early-warnings',
+    notificationsPath: '/teacher/notifications',
     sections: [
       {
         label: 'Teaching',
@@ -70,6 +71,7 @@ export const roleNavigation = {
         label: 'Support',
         items: [
           { title: 'Early warnings', path: '/teacher/early-warnings', icon: ShieldCheck },
+          { title: 'Notifications', path: '/teacher/notifications', icon: Bell },
           { title: 'Parent communication', path: '/teacher/parent-communication', icon: MessageSquareText },
           { title: 'Profile', path: '/teacher/profile', icon: CircleUserRound },
         ],
@@ -113,6 +115,7 @@ export const pageDescriptions = {
   '/admin/parents': 'Create parent accounts and manage links between guardians and learners.',
   '/admin/learners': 'Review learner information relevant to attendance and learning progress.',
   '/admin/early-warnings': 'Review patterns of repeated absences and declining marks.',
+  '/admin/notifications': 'Send school updates to all teachers or selected members of staff.',
   '/admin/parent-communication': 'Prepare supportive parent messages in English and Shona.',
   '/admin/teachers': 'Review teacher profiles and assigned classes.',
   '/admin/classes': 'Review school classes and their assigned teachers.',
@@ -122,6 +125,7 @@ export const pageDescriptions = {
   '/teacher/attendance': 'Record and review attendance for assigned classes.',
   '/teacher/assessments': 'Record assessments and review learner progress.',
   '/teacher/early-warnings': 'Review attendance and assessment patterns that may need support.',
+  '/teacher/notifications': 'Read school updates sent to you by your administrator.',
   '/teacher/parent-communication': 'Prepare supportive parent messages in English and Shona.',
   '/teacher/learners': 'Review learners in assigned classes only.',
   '/teacher/profile': 'Review this demonstration teacher profile.',

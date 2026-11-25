@@ -13,6 +13,7 @@ import attendanceRoutes from "./routes/attendance.routes.js";
 import assessmentRoutes from "./routes/assessment.routes.js";
 import earlyWarningRoutes from "./routes/earlyWarning.routes.js";
 import draftRoutes from "./routes/draft.routes.js";
+import notificationRoutes from "./routes/notification.routes.js";
 import parentRoutes from "./routes/parent.routes.js";
 import parentInvitationRoutes from "./routes/parentInvitation.routes.js";
 import { notFound, errorHandler } from "./middleware/errorHandler.js";
@@ -74,6 +75,7 @@ app.use("/api/schools/:schoolId", apiLimiter, attendanceRoutes);
 app.use("/api/schools/:schoolId", apiLimiter, assessmentRoutes);
 app.use("/api/schools/:schoolId/early-warning", apiLimiter, earlyWarningRoutes);
 app.use("/api/schools/:schoolId/drafts", apiLimiter, draftRoutes);
+app.use("/api/schools/:schoolId/notifications", apiLimiter, notificationRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
