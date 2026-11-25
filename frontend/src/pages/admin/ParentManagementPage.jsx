@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Copy, RefreshCw, ShieldCheck, UserPlus, Users, Mail, XCircle } from 'lucide-react'
+import {
+  Copy,
+  RefreshCw,
+  ShieldCheck,
+  UserPlus,
+  Users,
+  Mail,
+  XCircle,
+} from 'lucide-react'
 import { useAuth } from '../../context/useAuth'
 import { apiRequest } from '../../lib/api'
 import EmptyState from '../../components/common/EmptyState'
@@ -14,6 +22,7 @@ const getList = (response, label) => {
   if (!response?.success || !Array.isArray(response.data)) {
     throw new Error(`The server returned an invalid ${label} response.`)
   }
+
   return response.data
 }
 
@@ -36,33 +45,33 @@ function ParentManagementPage() {
 
   const [showForm, setShowForm] = useState(false)
   const [showInvitationForm, setShowInvitationForm] = useState(false)
-  const [createdCredentials, setCreatedCredentials] = useState(null)
   const [newInvitation, setNewInvitation] = useState(null)
-  const [copied, setCopied] = useState(false)
   const [invitationCopied, setInvitationCopied] = useState(false)
 
   const [form, setForm] = useState({
-    firstName: '',
-    lastName: '',
     email: '',
-    phone: '',
     learnerId: '',
     relationship: 'Parent',
   })
+
   const [invitationForm, setInvitationForm] = useState({
     email: '',
     learnerId: '',
   })
 
   const loadData = useCallback(async () => {
-    if (!schoolId) throw new Error('No active school was found. Please sign in again.')
+    if (!schoolId) {
+      throw new Error('No active school was found. Please sign in again.')
+    }
 
     const encodedSchoolId = encodeURIComponent(schoolId)
-    const [parentResponse, learnerResponse, invitationResponse] = await Promise.all([
-      apiRequest(`/schools/${encodedSchoolId}/parents`),
-      apiRequest(`/schools/${encodedSchoolId}/learners`),
-      apiRequest(`/schools/${encodedSchoolId}/parent-invitations`),
-    ])
+
+    const [parentResponse, learnerResponse, invitationResponse] =
+      await Promise.all([
+        apiRequest(`/schools/${encodedSchoolId}/parents`),
+        apiRequest(`/schools/${encodedSchoolId}/learners`),
+        apiRequest(`/schools/${encodedSchoolId}/parent-invitations`),
+      ])
 
     setParents(getList(parentResponse, 'parents'))
     setLearners(getList(learnerResponse, 'learners'))
@@ -75,17 +84,23 @@ function ParentManagementPage() {
     const load = async () => {
       setLoading(true)
       setError('')
+
       try {
         await loadData()
       } catch (requestError) {
-        if (!cancelled) setError(requestError.message || 'Unable to load parent records.')
+        if (!cancelled) {
+          setError(requestError.message || 'Unable to load parent records.')
+        }
       } finally {
         if (!cancelled) setLoading(false)
       }
     }
 
     load()
-    return () => { cancelled = true }
+
+    return () => {
+      cancelled = true
+    }
   }, [loadData])
 
   const updateField = (event) => {
@@ -100,10 +115,7 @@ function ParentManagementPage() {
 
   const resetForm = () => {
     setForm({
-      firstName: '',
-      lastName: '',
       email: '',
-      phone: '',
       learnerId: '',
       relationship: 'Parent',
     })
@@ -121,8 +133,6 @@ function ParentManagementPage() {
     event.preventDefault()
     setFormError('')
     setSuccess('')
-    setCreatedCredentials(null)
-    setCopied(false)
 
     if (!schoolId) {
       setFormError('Your active school could not be identified. Please sign in again.')
@@ -138,10 +148,7 @@ function ParentManagementPage() {
 
     try {
       const body = {
-        firstName: form.firstName.trim(),
-        lastName: form.lastName.trim(),
         email: form.email.trim(),
-        phone: form.phone.trim(),
         learnerId: form.learnerId,
         relationship: form.relationship.trim(),
       }
@@ -152,22 +159,19 @@ function ParentManagementPage() {
       )
 
       if (!response?.success || !response.data?.parent) {
-        throw new Error('The server returned an invalid parent creation response.')
+        throw new Error('The server returned an invalid parent linking response.')
       }
 
-      const { parent, accountCreated, tempPassword } = response.data
-
-      if (accountCreated && tempPassword) {
-        setCreatedCredentials({ parent, tempPassword })
-        setSuccess(`Parent account created for ${parent.firstName} ${parent.lastName}.`)
-      } else {
-        setSuccess(`The learner was linked to the existing parent account (${parent.email}). No new password was issued.`)
-      }
+      setSuccess(
+        `The learner was linked to the existing parent account (${response.data.parent.email}).`
+      )
 
       await loadData()
       resetForm()
     } catch (requestError) {
-      setFormError(requestError.message || 'Unable to create or link this parent.')
+      setFormError(
+        requestError.message || 'Unable to link this parent to the learner.'
+      )
     } finally {
       setSaving(false)
     }
@@ -204,16 +208,23 @@ function ParentManagementPage() {
         }
       )
 
-      if (!response?.success || !response.data?.invitationCode) {
-        throw new Error('The server did not return a valid invitation code.')
+      if (
+        !response?.success ||
+        !response.data?.invitation ||
+        !response.data?.activationUrl
+      ) {
+        throw new Error('The server did not return a valid activation link.')
       }
 
       setNewInvitation(response.data)
-      setSuccess(`Invitation created for ${invitationForm.email.trim()}.`)
+      setSuccess(`Activation link created for ${invitationForm.email.trim()}.`)
+
       await loadData()
       resetInvitationForm()
     } catch (requestError) {
-      setInvitationError(requestError.message || 'Unable to create this invitation.')
+      setInvitationError(
+        requestError.message || 'Unable to create this invitation.'
+      )
     } finally {
       setInviting(false)
     }
@@ -231,6 +242,7 @@ function ParentManagementPage() {
         `/schools/${encodeURIComponent(schoolId)}/parent-invitations/${encodeURIComponent(invitationId)}`,
         { method: 'DELETE' }
       )
+
       setSuccess('The invitation has been revoked.')
       await loadData()
     } catch (requestError) {
@@ -244,6 +256,7 @@ function ParentManagementPage() {
     setLoading(true)
     setError('')
     setSuccess('')
+
     try {
       await loadData()
     } catch (requestError) {
@@ -253,39 +266,21 @@ function ParentManagementPage() {
     }
   }
 
-  const copyCredentials = async () => {
-    if (!createdCredentials) return
-
-    const text = [
-      'Chiedza parent account',
-      `Email: ${createdCredentials.parent.email}`,
-      `Temporary password: ${createdCredentials.tempPassword}`,
-      'Please sign in and change your password.',
-    ].join('\n')
+  const copyActivationLink = async () => {
+    if (!newInvitation?.activationUrl) return
 
     try {
-      await navigator.clipboard.writeText(text)
-      setCopied(true)
-    } catch {
-      setCopied(false)
-      setError('Clipboard access was blocked. You can select and copy the credentials manually.')
-    }
-  }
-
-  const copyInvitationCode = async () => {
-    if (!newInvitation?.invitationCode) return
-
-    try {
-      await navigator.clipboard.writeText(newInvitation.invitationCode)
+      await navigator.clipboard.writeText(newInvitation.activationUrl)
       setInvitationCopied(true)
     } catch {
       setInvitationCopied(false)
-      setError('Clipboard access was blocked. Select and copy the invitation code manually.')
+      setError('Clipboard access was blocked. Select and copy the activation link manually.')
     }
   }
 
   const getLearnerName = (invitation) => {
     const learner = invitation.learner
+
     return learner
       ? `${learner.firstName} ${learner.lastName}`
       : 'Learner'
@@ -293,7 +288,9 @@ function ParentManagementPage() {
 
   const formatDate = (value) => {
     if (!value) return '—'
+
     const date = new Date(value)
+
     return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString()
   }
 
@@ -302,7 +299,7 @@ function ParentManagementPage() {
       <PageHeading
         eyebrow="School administration"
         title="Parents and guardians"
-        description="Create parent accounts, link guardians to learners, or invite parents to activate their own accounts."
+        description="Link existing parent accounts to learners or invite new parents to activate their own accounts."
       >
         <button
           type="button"
@@ -313,6 +310,7 @@ function ParentManagementPage() {
           <RefreshCw size={16} />
           Refresh
         </button>
+
         <button
           type="button"
           className="learner-secondary-button"
@@ -325,6 +323,7 @@ function ParentManagementPage() {
           <Mail size={16} />
           Invite parent
         </button>
+
         <button
           type="button"
           className="learner-primary-button"
@@ -339,63 +338,63 @@ function ParentManagementPage() {
         </button>
       </PageHeading>
 
-      {error && <div className="parent-data-message error" role="alert">{error}</div>}
-      {success && <div className="parent-data-message success" role="status">{success}</div>}
+      {error && (
+        <div className="parent-data-message error" role="alert">{error}</div>
+      )}
+
+      {success && (
+        <div className="parent-data-message success" role="status">{success}</div>
+      )}
 
       {newInvitation && (
-        <section className="parent-credentials parent-invitation-result" aria-labelledby="invitation-result-title">
+        <section
+          className="parent-credentials parent-invitation-result"
+          aria-labelledby="invitation-result-title"
+        >
           <div className="parent-credentials-heading">
             <ShieldCheck size={21} />
             <div>
-              <h2 id="invitation-result-title">Parent invitation created</h2>
+              <h2 id="invitation-result-title">Activation link created</h2>
               <p>
-                Share this code securely with the invited parent. It can be used once and expires
-                {newInvitation.expiresAt ? ` on ${formatDate(newInvitation.expiresAt)}` : ' after 48 hours'}.
-                The code will not be shown again after you dismiss this section.
+                Share this link privately with the invited parent. It can only
+                be used once and expires
+                {newInvitation.invitation.expiresAt
+                  ? ` on ${formatDate(newInvitation.invitation.expiresAt)}.`
+                  : ' after 48 hours.'}
+                {' '}The link is shown here only once.
               </p>
             </div>
           </div>
-          <div className="parent-invitation-code">
-            <span>One-time invitation code</span>
-            <strong>{newInvitation.invitationCode}</strong>
-          </div>
-          <div className="parent-credentials-actions">
-            <button type="button" className="learner-primary-button" onClick={copyInvitationCode}>
-              <Copy size={15} />
-              {invitationCopied ? 'Copied' : 'Copy invitation code'}
-            </button>
-            <button type="button" className="learner-secondary-button" onClick={() => setNewInvitation(null)}>
-              Dismiss
-            </button>
-          </div>
-        </section>
-      )}
 
-      {createdCredentials && (
-        <section className="parent-credentials" aria-labelledby="parent-credentials-title">
-          <div className="parent-credentials-heading">
-            <ShieldCheck size={21} />
-            <div>
-              <h2 id="parent-credentials-title">Temporary login credentials</h2>
-              <p>Share these credentials with the parent through a secure channel. They must change the password after signing in.</p>
-            </div>
+          <div className="parent-invitation-code">
+            <span>Secure parent activation link</span>
+            <input
+              type="text"
+              readOnly
+              aria-label="Parent activation link"
+              value={newInvitation.activationUrl}
+              onFocus={(event) => event.target.select()}
+            />
           </div>
-          <div className="parent-credentials-details">
-            <div>
-              <span>Email address</span>
-              <strong>{createdCredentials.parent.email}</strong>
-            </div>
-            <div>
-              <span>Temporary password</span>
-              <strong className="parent-temp-password">{createdCredentials.tempPassword}</strong>
-            </div>
-          </div>
+
           <div className="parent-credentials-actions">
-            <button type="button" className="learner-primary-button" onClick={copyCredentials}>
+            <button
+              type="button"
+              className="learner-primary-button"
+              onClick={copyActivationLink}
+            >
               <Copy size={15} />
-              {copied ? 'Copied' : 'Copy credentials'}
+              {invitationCopied ? 'Copied' : 'Copy activation link'}
             </button>
-            <button type="button" className="learner-secondary-button" onClick={() => setCreatedCredentials(null)}>
+
+            <button
+              type="button"
+              className="learner-secondary-button"
+              onClick={() => {
+                setNewInvitation(null)
+                setInvitationCopied(false)
+              }}
+            >
               Dismiss
             </button>
           </div>
@@ -403,17 +402,23 @@ function ParentManagementPage() {
       )}
 
       {showInvitationForm && (
-        <section className="learner-form-card" aria-labelledby="parent-invitation-form-title">
+        <section
+          className="learner-form-card"
+          aria-labelledby="parent-invitation-form-title"
+        >
           <div className="parent-form-heading">
             <div>
               <p className="eyebrow">Self-service activation</p>
               <h2 id="parent-invitation-form-title">Invite a parent or guardian</h2>
             </div>
           </div>
+
           <p className="parent-form-guidance">
-            Enter the parent's email and select their learner. The school must share the generated
-            invitation code with the parent. No email is sent automatically.
+            Enter the parent's email and select their learner. Chiedza will
+            generate a secure activation link. The school must share the link
+            privately; no email is sent automatically.
           </p>
+
           <form onSubmit={handleCreateInvitation}>
             <div className="parent-form-grid">
               <FormField id="invitation-email" label="Parent email address">
@@ -421,12 +426,14 @@ function ParentManagementPage() {
                   id="invitation-email"
                   name="email"
                   type="email"
+                  autoComplete="email"
                   value={invitationForm.email}
                   onChange={updateInvitationField}
                   maxLength={254}
                   required
                 />
               </FormField>
+
               <FormField id="invitation-learner" label="Learner">
                 <select
                   id="invitation-learner"
@@ -445,19 +452,34 @@ function ParentManagementPage() {
               </FormField>
             </div>
 
-            {invitationError && <p className="parent-form-error" role="alert">{invitationError}</p>}
+            {invitationError && (
+              <p className="parent-form-error" role="alert">{invitationError}</p>
+            )}
 
             <div className="parent-form-actions">
-              <button type="button" className="learner-secondary-button" onClick={resetInvitationForm} disabled={inviting}>
+              <button
+                type="button"
+                className="learner-secondary-button"
+                onClick={resetInvitationForm}
+                disabled={inviting}
+              >
                 Cancel
               </button>
-              <button type="submit" className="learner-primary-button" disabled={inviting || learners.length === 0}>
+
+              <button
+                type="submit"
+                className="learner-primary-button"
+                disabled={inviting || learners.length === 0}
+              >
                 <Mail size={16} />
-                {inviting ? 'Creating invitation…' : 'Create invitation'}
+                {inviting ? 'Creating link…' : 'Create activation link'}
               </button>
             </div>
+
             {learners.length === 0 && (
-              <p className="parent-form-guidance">Register at least one learner before issuing an invitation.</p>
+              <p className="parent-form-guidance">
+                Register at least one learner before issuing an invitation.
+              </p>
             )}
           </form>
         </section>
@@ -467,31 +489,40 @@ function ParentManagementPage() {
         <section className="learner-form-card" aria-labelledby="parent-form-title">
           <div className="parent-form-heading">
             <div>
-              <p className="eyebrow">Parent account</p>
-              <h2 id="parent-form-title">Add a parent or guardian</h2>
+              <p className="eyebrow">Existing parent account</p>
+              <h2 id="parent-form-title">Link a parent or guardian</h2>
             </div>
           </div>
 
           <p className="parent-form-guidance">
-            Use the parent's email address. If an existing parent account in this school uses that email, the selected learner will be linked to it.
+            Enter the email address used by an existing parent account in this
+            school, then select the learner and relationship. To create a new
+            account, use Invite parent instead.
           </p>
 
           <form onSubmit={handleCreate}>
             <div className="parent-form-grid">
-              <FormField id="parent-first-name" label="First name">
-                <input id="parent-first-name" name="firstName" value={form.firstName} onChange={updateField} required maxLength={60} />
+              <FormField id="parent-email" label="Parent email address">
+                <input
+                  id="parent-email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  value={form.email}
+                  onChange={updateField}
+                  required
+                  maxLength={254}
+                />
               </FormField>
-              <FormField id="parent-last-name" label="Last name">
-                <input id="parent-last-name" name="lastName" value={form.lastName} onChange={updateField} required maxLength={60} />
-              </FormField>
-              <FormField id="parent-email" label="Email address">
-                <input id="parent-email" name="email" type="email" value={form.email} onChange={updateField} required maxLength={254} />
-              </FormField>
-              <FormField id="parent-phone" label="Phone number (optional)">
-                <input id="parent-phone" name="phone" type="tel" value={form.phone} onChange={updateField} maxLength={30} />
-              </FormField>
+
               <FormField id="parent-learner" label="Learner">
-                <select id="parent-learner" name="learnerId" value={form.learnerId} onChange={updateField} required>
+                <select
+                  id="parent-learner"
+                  name="learnerId"
+                  value={form.learnerId}
+                  onChange={updateField}
+                  required
+                >
                   <option value="">Select a learner</option>
                   {learners.map((learner) => (
                     <option key={learner.id} value={learner.id}>
@@ -500,8 +531,15 @@ function ParentManagementPage() {
                   ))}
                 </select>
               </FormField>
+
               <FormField id="parent-relationship" label="Relationship">
-                <select id="parent-relationship" name="relationship" value={form.relationship} onChange={updateField} required>
+                <select
+                  id="parent-relationship"
+                  name="relationship"
+                  value={form.relationship}
+                  onChange={updateField}
+                  required
+                >
                   <option value="Parent">Parent</option>
                   <option value="Mother">Mother</option>
                   <option value="Father">Father</option>
@@ -511,19 +549,34 @@ function ParentManagementPage() {
               </FormField>
             </div>
 
-            {formError && <p className="parent-form-error" role="alert">{formError}</p>}
+            {formError && (
+              <p className="parent-form-error" role="alert">{formError}</p>
+            )}
 
             <div className="parent-form-actions">
-              <button type="button" className="learner-secondary-button" onClick={resetForm} disabled={saving}>
+              <button
+                type="button"
+                className="learner-secondary-button"
+                onClick={resetForm}
+                disabled={saving}
+              >
                 Cancel
               </button>
-              <button type="submit" className="learner-primary-button" disabled={saving || learners.length === 0}>
+
+              <button
+                type="submit"
+                className="learner-primary-button"
+                disabled={saving || learners.length === 0}
+              >
                 <UserPlus size={16} />
-                {saving ? 'Saving…' : 'Create / link parent'}
+                {saving ? 'Linking…' : 'Link parent to learner'}
               </button>
             </div>
+
             {learners.length === 0 && (
-              <p className="parent-form-guidance">Register at least one learner before adding a parent account.</p>
+              <p className="parent-form-guidance">
+                Register at least one learner before linking a parent account.
+              </p>
             )}
           </form>
         </section>
@@ -538,28 +591,42 @@ function ParentManagementPage() {
         ) : parents.length === 0 ? (
           <EmptyState
             title="No parents registered yet"
-            description="Create a parent account and link it to a learner to get started."
+            description="Link an existing parent account or invite a parent to activate a new account."
             icon={Users}
           />
         ) : (
           <div className="parent-table-wrap">
             <table className="parent-table">
               <thead>
-                <tr><th>Parent / guardian</th><th>Email</th><th>Phone</th><th>Linked learners</th></tr>
+                <tr>
+                  <th>Parent / guardian</th>
+                  <th>Email</th>
+                  <th>Phone</th>
+                  <th>Linked learners</th>
+                </tr>
               </thead>
               <tbody>
                 {parents.map((parent) => (
                   <tr key={parent.id}>
-                    <td><strong>{parent.firstName} {parent.lastName}</strong></td>
+                    <td>
+                      <strong>{parent.firstName} {parent.lastName}</strong>
+                    </td>
                     <td>{parent.email}</td>
                     <td>{parent.phone || '—'}</td>
                     <td>
                       <div className="parent-linked-learners">
                         {(parent.children || []).map((child) => (
-                          <span className="parent-record-tag" key={child.parentLinkId || child.id}>
+                          <span
+                            className="parent-record-tag"
+                            key={child.parentLinkId || child.id}
+                          >
                             {child.firstName} {child.lastName}
-                            {child.schoolClass?.name ? ` · ${child.schoolClass.name}` : ''}
-                            {child.relationship ? ` · ${child.relationship}` : ''}
+                            {child.schoolClass?.name
+                              ? ` · ${child.schoolClass.name}`
+                              : ''}
+                            {child.relationship
+                              ? ` · ${child.relationship}`
+                              : ''}
                           </span>
                         ))}
                       </div>
@@ -581,7 +648,7 @@ function ParentManagementPage() {
         ) : invitations.length === 0 ? (
           <EmptyState
             title="No parent invitations yet"
-            description="Use Invite parent to create a one-time activation code for a learner's parent or guardian."
+            description="Use Invite parent to create a one-time activation link for a learner's parent or guardian."
             icon={Mail}
           />
         ) : (
@@ -602,7 +669,9 @@ function ParentManagementPage() {
                     <td>{invitation.invitedEmail || '—'}</td>
                     <td>{getLearnerName(invitation)}</td>
                     <td>
-                      <span className={`parent-invitation-status status-${String(invitation.status || '').toLowerCase()}`}>
+                      <span
+                        className={`parent-invitation-status status-${String(invitation.status || '').toLowerCase()}`}
+                      >
                         {invitation.status || 'Unknown'}
                       </span>
                     </td>

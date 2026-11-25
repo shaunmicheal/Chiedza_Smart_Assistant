@@ -1,17 +1,19 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import AuthFrame from './AuthFrame'
 import FormField from '../../components/common/FormField'
 import { apiRequest } from '../../lib/api'
 
 function ActivationPage() {
   const navigate = useNavigate()
+  const tokenRead = useRef(false)
+
+  const [token, setToken] = useState('')
+  const [tokenChecked, setTokenChecked] = useState(false)
   const [form, setForm] = useState({
     firstName: '',
     lastName: '',
-    email: '',
-    invitationCode: '',
     password: '',
     confirmPassword: '',
   })
@@ -19,6 +21,26 @@ function ActivationPage() {
   const [loading, setLoading] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [activated, setActivated] = useState(false)
+
+  useEffect(() => {
+    if (tokenRead.current) return
+    tokenRead.current = true
+
+    const params = new URLSearchParams(window.location.hash.slice(1))
+    const invitationToken = params.get('token') || ''
+
+    // Remove the sensitive token from the address bar immediately.
+    if (window.location.hash) {
+      window.history.replaceState(
+        {},
+        document.title,
+        `${window.location.pathname}${window.location.search}`
+      )
+    }
+
+    setToken(invitationToken)
+    setTokenChecked(true)
+  }, [])
 
   const updateField = (event) => {
     const { name, value } = event.target
@@ -34,6 +56,11 @@ function ActivationPage() {
       return
     }
 
+    if (!token) {
+      setFeedback('This activation link is missing its security token.')
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -43,33 +70,57 @@ function ActivationPage() {
         body: {
           firstName: form.firstName.trim(),
           lastName: form.lastName.trim(),
-          email: form.email.trim(),
-          invitationCode: form.invitationCode.trim(),
+          token,
           password: form.password,
         },
       })
 
-      if (!response?.success || !response.data?.id) {
+      if (!response?.success || !response.data) {
         throw new Error('The server returned an invalid activation response.')
       }
 
       setActivated(true)
-      setFeedback('Your parent account has been activated successfully. You can now sign in.')
+      setToken('')
+      setFeedback(
+        response.message || 'Your parent account has been activated. You can now sign in.'
+      )
     } catch (error) {
-      setFeedback(error.message || 'Unable to activate this invitation. Please check your details and try again.')
+      setFeedback(
+        error.message || 'Unable to activate this invitation. Please contact your school.'
+      )
     } finally {
       setLoading(false)
     }
   }
 
+  if (!tokenChecked) {
+    return (
+      <AuthFrame
+        eyebrow="Parent / guardian invitation"
+        title="Preparing activation"
+        description="Checking your secure invitation link."
+      >
+        <p className="form-feedback" role="status">Please wait…</p>
+      </AuthFrame>
+    )
+  }
+
   return (
     <AuthFrame
       eyebrow="Parent / guardian invitation"
-      title={activated ? 'Account activated' : 'Activate your account'}
+      title={
+        activated
+          ? 'Account activated'
+          : token
+            ? 'Activate your account'
+            : 'Invitation unavailable'
+      }
       description={
         activated
-          ? 'Your parent account is ready.'
-          : 'Enter the details shared by your school and choose a secure password.'
+          ? 'Your parent account is ready. You can now sign in.'
+          : token
+            ? 'Confirm your name and create a secure password for your parent account.'
+            : 'This link is missing its invitation token. Ask your school administrator for a valid activation link.'
       }
     >
       {activated ? (
@@ -83,7 +134,7 @@ function ActivationPage() {
             Continue to sign in
           </button>
         </>
-      ) : (
+      ) : token ? (
         <form className="auth-form" onSubmit={handleSubmit}>
           <FormField id="activation-first-name" label="First name">
             <input
@@ -109,35 +160,11 @@ function ActivationPage() {
             />
           </FormField>
 
-          <FormField id="activation-email" label="Email address">
-            <input
-              id="activation-email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              value={form.email}
-              onChange={updateField}
-              maxLength={254}
-              required
-            />
-          </FormField>
-
           <FormField
-            id="invitation-code"
-            label="Invitation code"
-            hint="Use the code provided by your school. It can only be used once."
+            id="activation-password"
+            label="Create password"
+            hint="Use at least 8 characters."
           >
-            <input
-              id="invitation-code"
-              name="invitationCode"
-              autoComplete="one-time-code"
-              value={form.invitationCode}
-              onChange={updateField}
-              required
-            />
-          </FormField>
-
-          <FormField id="activation-password" label="Create password" hint="Use at least 8 characters.">
             <div className="password-field">
               <input
                 id="activation-password"
@@ -178,17 +205,31 @@ function ActivationPage() {
             />
           </FormField>
 
-          <button type="submit" className="primary-button auth-submit" disabled={loading}>
+          <button
+            type="submit"
+            className="primary-button auth-submit"
+            disabled={loading}
+          >
             {loading ? 'Activating account…' : 'Activate account'}
           </button>
 
           {feedback && <p className="form-feedback" role="alert">{feedback}</p>}
         </form>
+      ) : (
+        <div>
+          <p className="form-feedback" role="alert">
+            Your activation link may be incomplete, expired or already used.
+            Please contact your school administrator for assistance.
+          </p>
+          <button
+            type="button"
+            className="primary-button auth-submit"
+            onClick={() => navigate('/login', { replace: true })}
+          >
+            Return to sign in
+          </button>
+        </div>
       )}
-
-      <p className="auth-switch">
-        Already activated? <Link to="/login">Return to sign in</Link>
-      </p>
     </AuthFrame>
   )
 }
