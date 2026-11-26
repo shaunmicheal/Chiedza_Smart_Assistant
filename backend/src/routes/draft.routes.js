@@ -35,6 +35,7 @@ router.get(
 router.post(
   "/generate",
   requireSchoolMembership,
+  requireRole("SCHOOL_ADMIN", "TEACHER"),
   validate(generateDraftSchema),
   generateDraft,
 );
@@ -43,6 +44,7 @@ router.post(
 router.patch(
   "/:draftId",
   requireSchoolMembership,
+  requireRole("SCHOOL_ADMIN", "TEACHER"),
   validate(editDraftSchema),
   editDraft,
 );
@@ -51,6 +53,7 @@ router.patch(
 router.patch(
   "/:draftId/approve",
   requireSchoolMembership,
+  requireRole("SCHOOL_ADMIN", "TEACHER"),
   validate(approveDraftSchema),
   approveDraft,
 );

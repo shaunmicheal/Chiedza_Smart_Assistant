@@ -13,6 +13,22 @@ enum UserRole {
   PARENT
 }
 
+enum PlatformRole {
+  SUPER_ADMIN
+}
+
+enum SchoolApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum SchoolApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum NotificationPriority {
   NORMAL
   IMPORTANT
@@ -46,50 +62,56 @@ enum AttendanceStatus {
 }
 
 model School {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  email     String?
-  phone     String?
-  address   String?
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String               @id @default(cuid())
+  name           String
+  slug           String               @unique
+  email          String?
+  phone          String?
+  address        String?
+  isActive       Boolean              @default(true)
+  approvalStatus SchoolApprovalStatus @default(APPROVED)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
 
-  memberships          SchoolMembership[]
-  classes              SchoolClass[]
-  learners             Learner[]
-  invitations          ParentInvitation[]
-  attendances          Attendance[]
-  assessments          Assessment[]
-  assessmentResults    AssessmentResult[]
-  classTeachers        ClassTeacher[]
-  alertRules           AlertRule[]
-  earlyWarningAlerts   EarlyWarningAlert[]
-  alertStatusHistories AlertStatusHistory[]
-  communicationDrafts  ParentCommunicationDraft[]
-  notifications        SchoolNotification[]
+  memberships            SchoolMembership[]
+  classes                SchoolClass[]
+  learners               Learner[]
+  invitations            ParentInvitation[]
+  attendances            Attendance[]
+  assessments            Assessment[]
+  assessmentResults      AssessmentResult[]
+  classTeachers          ClassTeacher[]
+  alertRules             AlertRule[]
+  earlyWarningAlerts     EarlyWarningAlert[]
+  alertStatusHistories   AlertStatusHistory[]
+  communicationDrafts    ParentCommunicationDraft[]
+  notifications          SchoolNotification[]
+  application            SchoolApplication?
+  schoolAdminInvitations SchoolAdminInvitation[]
 }
 
 model User {
-  id                 String   @id @default(cuid())
+  id                 String        @id @default(cuid())
   firstName          String
   lastName           String
-  email              String   @unique
+  email              String        @unique
   phone              String?
   passwordHash       String
-  isActive           Boolean  @default(true)
-  mustChangePassword Boolean  @default(false)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  isActive           Boolean       @default(true)
+  mustChangePassword Boolean       @default(false)
+  platformRole       PlatformRole?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
-  memberships                SchoolMembership[]
-  parentLinks                ParentLearner[]
-  attendances                Attendance[]
-  attendanceUpdatedBy        Attendance[]               @relation("AttendanceUpdatedBy")
-  assessmentResults          AssessmentResult[]
-  assessmentResultUpdatedBy  AssessmentResult[]         @relation("AssessmentResultUpdatedBy")
-  createdCommunicationDrafts ParentCommunicationDraft[]
+  memberships                   SchoolMembership[]
+  parentLinks                   ParentLearner[]
+  attendances                   Attendance[]
+  attendanceUpdatedBy           Attendance[]               @relation("AttendanceUpdatedBy")
+  assessmentResults             AssessmentResult[]
+  assessmentResultUpdatedBy     AssessmentResult[]         @relation("AssessmentResultUpdatedBy")
+  createdCommunicationDrafts    ParentCommunicationDraft[]
+  reviewedSchoolApplications    SchoolApplication[]        @relation("SchoolApplicationReviewer")
+  createdSchoolAdminInvitations SchoolAdminInvitation[]    @relation("SchoolAdminInvitationCreator")
 }
 
 model SchoolMembership {
@@ -401,4 +423,51 @@ model NotificationRecipient {
   @@unique([notificationId, membershipId])
   @@index([schoolId, membershipId, readAt])
   @@index([notificationId])
+}
+
+model SchoolApplication {
+  id                 String                  @id @default(cuid())
+  schoolName         String
+  applicantFirstName String
+  applicantLastName  String
+  applicantEmail     String
+  applicantPhone     String?
+  schoolEmail        String?
+  schoolPhone        String?
+  address            String
+  status             SchoolApplicationStatus @default(PENDING)
+  reviewedAt         DateTime?
+  reviewedByUserId   String?
+  rejectionReason    String?
+  schoolId           String?                 @unique
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  reviewedBy User?   @relation("SchoolApplicationReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  school     School? @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([applicantEmail])
+}
+
+model SchoolAdminInvitation {
+  id               String           @id @default(cuid())
+  schoolId         String
+  invitedByUserId  String
+  invitedEmail     String
+  invitedFirstName String
+  invitedLastName  String
+  tokenHash        String           @unique
+  status           InvitationStatus @default(PENDING)
+  expiresAt        DateTime
+  acceptedAt       DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  school    School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  invitedBy User   @relation("SchoolAdminInvitationCreator", fields: [invitedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([schoolId, status])
+  @@index([schoolId, invitedEmail])
+  @@index([invitedByUserId])
 }

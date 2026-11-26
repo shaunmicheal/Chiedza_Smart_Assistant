@@ -2,7 +2,14 @@ import prisma from "../config/prisma.js";
 
 export const listSchoolsForUser = async (userId) => {
   const memberships = await prisma.schoolMembership.findMany({
-    where: { userId, isActive: true },
+    where: {
+      userId,
+      isActive: true,
+      school: {
+        isActive: true,
+        approvalStatus: "APPROVED",
+      },
+    },
     include: {
       school: true,
     },
@@ -40,7 +47,6 @@ export const updateSchool = async (schoolId, data) => {
       ...(data.email !== undefined && { email: data.email === "" ? null : data.email }),
       ...(data.phone !== undefined && { phone: data.phone }),
       ...(data.address !== undefined && { address: data.address }),
-      ...(data.isActive !== undefined && { isActive: data.isActive }),
     },
   });
   return updated;

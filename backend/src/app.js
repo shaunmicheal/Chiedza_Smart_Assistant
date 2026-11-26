@@ -2,12 +2,10 @@ import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
-import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
 
 import healthRoutes from "./routes/health.routes.js";
 import authRoutes from "./routes/auth.routes.js";
-import bootstrapRoutes from "./routes/bootstrap.routes.js";
 import schoolsRoutes from "./routes/schools.routes.js";
 import attendanceRoutes from "./routes/attendance.routes.js";
 import assessmentRoutes from "./routes/assessment.routes.js";
@@ -16,6 +14,9 @@ import draftRoutes from "./routes/draft.routes.js";
 import notificationRoutes from "./routes/notification.routes.js";
 import parentRoutes from "./routes/parent.routes.js";
 import parentInvitationRoutes from "./routes/parentInvitation.routes.js";
+import schoolAdminInvitationRoutes from "./routes/schoolAdminInvitation.routes.js";
+import schoolApplicationRoutes from "./routes/schoolApplication.routes.js";
+import platformRoutes from "./routes/platform.routes.js";
 import { notFound, errorHandler } from "./middleware/errorHandler.js";
 
 const app = express();
@@ -42,12 +43,10 @@ app.use(
 
       return callback(null, false);
     },
-    credentials: true,
   })
 );
 
 app.use(express.json());
-app.use(cookieParser());
 app.use(morgan("dev"));
 
 const createLimiter = (max) =>
@@ -62,15 +61,17 @@ const createLimiter = (max) =>
 
 const authLimiter = createLimiter(100);
 const apiLimiter = createLimiter(300);
-const bootstrapLimiter = createLimiter(10);
 const activationLimiter = createLimiter(10);
+const publicApplicationLimiter = createLimiter(10);
 
 app.use("/api/health", healthRoutes);
+app.use("/api/school-applications", publicApplicationLimiter, schoolApplicationRoutes);
+app.use("/api/platform", apiLimiter, platformRoutes);
 app.use("/api/auth", authLimiter, authRoutes);
-app.use("/api/bootstrap", bootstrapLimiter, bootstrapRoutes);
 app.use("/api/schools", apiLimiter, schoolsRoutes);
 app.use("/api/parent", apiLimiter, parentRoutes);
 app.use("/api/parent-invitations", activationLimiter, parentInvitationRoutes);
+app.use("/api/admin-invitations", activationLimiter, schoolAdminInvitationRoutes);
 app.use("/api/schools/:schoolId", apiLimiter, attendanceRoutes);
 app.use("/api/schools/:schoolId", apiLimiter, assessmentRoutes);
 app.use("/api/schools/:schoolId/early-warning", apiLimiter, earlyWarningRoutes);

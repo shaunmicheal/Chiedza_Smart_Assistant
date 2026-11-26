@@ -1,0 +1,297 @@
+.platform-schools {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.platform-school-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin: 24px 0;
+}
+
+.platform-school-stat {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 17px;
+}
+
+.platform-school-stat-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  place-items: center;
+  border-radius: 11px;
+  background: var(--sage);
+  color: var(--forest);
+}
+
+.platform-school-stat > div {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.platform-school-stat > div span {
+  color: var(--muted);
+  font-size: 0.73rem;
+}
+
+.platform-school-stat strong {
+  color: var(--forest);
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.platform-school-filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(170px, 220px) minmax(150px, 190px);
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 15px;
+}
+
+.platform-school-search {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--muted);
+}
+
+.platform-school-search:focus-within {
+  border-color: var(--forest);
+  outline: 3px solid rgba(23, 77, 58, 0.08);
+}
+
+.platform-school-search input {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--charcoal);
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.platform-school-filters select {
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 11px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--charcoal);
+  font: inherit;
+  font-size: 0.8rem;
+}
+
+.platform-school-filters select:focus {
+  border-color: var(--forest);
+  outline: 3px solid rgba(23, 77, 58, 0.08);
+}
+
+.platform-school-list {
+  display: grid;
+  gap: 16px;
+}
+
+.platform-school-card {
+  padding: 22px;
+}
+
+.platform-school-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.platform-school-title {
+  min-width: 0;
+  flex: 1;
+}
+
+.platform-school-title h3 {
+  overflow-wrap: anywhere;
+  color: var(--forest);
+  font-size: 1.08rem;
+}
+
+.platform-school-title p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.platform-school-statuses {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.platform-access-status {
+  padding: 6px 10px;
+  border-radius: 20px;
+  background: #edf0ed;
+  color: #536159;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.platform-access-status.active {
+  background: #e4f1e8;
+  color: #216343;
+}
+
+.platform-access-status.suspended {
+  background: #f8e9e6;
+  color: #a04438;
+}
+
+.platform-school-contact {
+  display: grid;
+  gap: 6px;
+  margin-top: 20px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.platform-school-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin-top: 20px;
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.platform-school-counts > div {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.platform-school-counts svg {
+  color: var(--forest);
+}
+
+.platform-school-counts strong {
+  color: var(--charcoal);
+}
+
+.platform-school-role-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.platform-school-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+.platform-school-card-actions .application-approve-button,
+.platform-school-card-actions .application-reject-button {
+  cursor: pointer;
+}
+
+.platform-school-access-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.77rem;
+}
+
+@media (max-width: 900px) {
+  .platform-school-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .platform-school-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .platform-school-search {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 600px) {
+  .platform-school-summary {
+    gap: 9px;
+  }
+
+  .platform-school-stat {
+    padding: 13px;
+  }
+
+  .platform-school-stat-icon {
+    width: 34px;
+    height: 34px;
+    flex-basis: 34px;
+  }
+
+  .platform-school-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .platform-school-search {
+    grid-column: auto;
+  }
+
+  .platform-school-card {
+    padding: 16px;
+  }
+
+  .platform-school-card-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .platform-school-statuses {
+    width: 100%;
+    justify-content: flex-start;
+    padding-left: 60px;
+  }
+
+  .platform-school-counts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .platform-school-card-actions {
+    justify-content: stretch;
+  }
+
+  .platform-school-card-actions button {
+    width: 100%;
+  }
+}
+
+.platform-school-details-link {
+  margin-right: auto;
+  color: var(--forest);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.platform-school-details-link:hover {
+  text-decoration: underline;
+}

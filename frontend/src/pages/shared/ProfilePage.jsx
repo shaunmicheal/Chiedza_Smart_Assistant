@@ -46,8 +46,9 @@ function ProfilePage({ role }) {
     .slice(0, 2)
     .toUpperCase()
 
-  const currentRole = activeMembership?.role || user?.memberships?.[0]?.role
+  const currentRole = user?.platformRole || activeMembership?.role || user?.memberships?.[0]?.role
   const roleLabels = {
+    SUPER_ADMIN: 'Platform administrator',
     SCHOOL_ADMIN: 'School administrator',
     TEACHER: 'Teacher',
     PARENT: 'Parent / guardian',

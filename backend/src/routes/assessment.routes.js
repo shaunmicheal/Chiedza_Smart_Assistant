@@ -101,6 +101,7 @@ router.post(
   "/assessments",
   validate(createAssessmentSchema),
   requireSchoolMembership,
+  requireRole("SCHOOL_ADMIN", "TEACHER"),
   requireClassAccess,
   assessmentCtrl.createAssessment,
 );
@@ -110,6 +111,7 @@ router.get(
   "/assessments",
   validate(listAssessmentsQuerySchema),
   requireSchoolMembership,
+  requireRole("SCHOOL_ADMIN", "TEACHER"),
   requireClassAccess,
   assessmentCtrl.listAssessments,
 );
@@ -119,6 +121,7 @@ router.get(
   "/assessments/:assessmentId",
   validate(schoolAndIdParamSchema("assessmentId")),
   requireSchoolMembership,
+  requireRole("SCHOOL_ADMIN", "TEACHER"),
   requireClassAccess,
   assessmentCtrl.getAssessmentById,
 );
@@ -128,6 +131,7 @@ router.patch(
   "/assessments/:assessmentId",
   validate(updateAssessmentSchema),
   requireSchoolMembership,
+  requireRole("SCHOOL_ADMIN", "TEACHER"),
   requireClassAccess,
   assessmentCtrl.updateAssessment,
 );
@@ -137,6 +141,7 @@ router.post(
   "/assessments/:assessmentId/results",
   validate(recordAssessmentResultSchema),
   requireSchoolMembership,
+  requireRole("SCHOOL_ADMIN", "TEACHER"),
   requireClassAccess,
   assessmentCtrl.recordAssessmentResult,
 );
@@ -146,6 +151,7 @@ router.get(
   "/assessments/:assessmentId/results",
   validate(listAssessmentResultsQuerySchema),
   requireSchoolMembership,
+  requireRole("SCHOOL_ADMIN", "TEACHER"),
   requireClassAccess,
   assessmentCtrl.listAssessmentResults,
 );
@@ -155,6 +161,7 @@ router.get(
   "/learners/:learnerId/assessments",
   validate(listLearnerAssessmentsQuerySchema),
   requireSchoolMembership,
+  requireRole("SCHOOL_ADMIN", "TEACHER"),
   requireClassAccess,
   assessmentCtrl.getLearnerAssessments,
 );
@@ -164,6 +171,7 @@ router.patch(
   "/assessments/:assessmentId/results/:resultId",
   validate(updateAssessmentResultSchema),
   requireSchoolMembership,
+  requireRole("SCHOOL_ADMIN", "TEACHER"),
   requireClassAccess,
   assessmentCtrl.updateAssessmentResult,
 );

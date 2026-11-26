@@ -97,6 +97,13 @@ export const createParent = async (schoolId, data) => {
     );
   }
 
+  if (!existingUser.isActive) {
+    throw makeError(
+      "This parent account is inactive. Contact the platform administrator.",
+      403
+    );
+  }
+
   const schoolMembership = existingUser.memberships[0];
 
   if (!schoolMembership || schoolMembership.role !== "PARENT") {
@@ -142,7 +149,13 @@ const getLinkedLearnerIds = async (guardianUserId) => {
     where: {
       guardianUserId,
       status: "VERIFIED",
-      learner: { isActive: true },
+      learner: {
+        isActive: true,
+        school: {
+          isActive: true,
+          approvalStatus: "APPROVED",
+        },
+      },
     },
     select: { learnerId: true },
   });
@@ -155,7 +168,13 @@ export const listMyChildren = async (guardianUserId) =>
     where: {
       guardianUserId,
       status: "VERIFIED",
-      learner: { isActive: true },
+      learner: {
+        isActive: true,
+        school: {
+          isActive: true,
+          approvalStatus: "APPROVED",
+        },
+      },
     },
     include: {
       learner: {
@@ -486,6 +505,22 @@ export const activateParentInvitation = async (data) => {
 
       if (claimed.count !== 1) {
         throw makeError("This invitation is no longer available.", 409);
+      }
+
+      const school = await tx.school.findFirst({
+        where: {
+          id: invitation.schoolId,
+          isActive: true,
+          approvalStatus: "APPROVED",
+        },
+        select: { id: true },
+      });
+
+      if (!school) {
+        throw makeError(
+          "This school's account is not currently active. Contact the school.",
+          409
+        );
       }
 
       const learner = await tx.learner.findFirst({

@@ -8,7 +8,21 @@ const ROLE_HOME = {
   PARENT: '/parent/overview',
 }
 
-function ProtectedRoute({ role, allowPasswordChange = false, children }) {
+function getUserHome(user) {
+  if (user?.platformRole === 'SUPER_ADMIN') {
+    return '/platform/overview'
+  }
+
+  const role = user?.memberships?.[0]?.role
+  return ROLE_HOME[role] || '/login'
+}
+
+function ProtectedRoute({
+  role,
+  platformRole,
+  allowPasswordChange = false,
+  children,
+}) {
   const { user, loading, setActiveMembership } = useAuth()
   const location = useLocation()
 
@@ -17,14 +31,16 @@ function ProtectedRoute({ role, allowPasswordChange = false, children }) {
     : null
 
   useEffect(() => {
-    if (membership) setActiveMembership(membership)
+    if (membership) {
+      setActiveMembership(membership)
+    }
   }, [membership, setActiveMembership])
 
   if (loading) {
     return (
       <main className="route-loading" role="status">
         <span className="loading-spinner" aria-hidden="true" />
-        <span>Checking your school session…</span>
+        <span>Checking your Chiedza session…</span>
       </main>
     )
   }
@@ -41,9 +57,9 @@ function ProtectedRoute({ role, allowPasswordChange = false, children }) {
 
   if (allowPasswordChange) {
     if (!user.mustChangePassword) {
-      const fallback = user.memberships?.[0]
-      return <Navigate to={ROLE_HOME[fallback?.role] || '/login'} replace />
+      return <Navigate to={getUserHome(user)} replace />
     }
+
     return children
   }
 
@@ -51,14 +67,21 @@ function ProtectedRoute({ role, allowPasswordChange = false, children }) {
     return <Navigate to="/password-change" replace />
   }
 
+  if (platformRole) {
+    if (user.platformRole !== platformRole) {
+      return <Navigate to={getUserHome(user)} replace />
+    }
+
+    return children
+  }
+
+  // Platform administrators must not enter school workspaces.
+  if (user.platformRole === 'SUPER_ADMIN') {
+    return <Navigate to="/platform/overview" replace />
+  }
+
   if (!membership) {
-    const fallback = user.memberships?.[0]
-    return (
-      <Navigate
-        to={ROLE_HOME[fallback?.role] || '/login'}
-        replace
-      />
-    )
+    return <Navigate to={getUserHome(user)} replace />
   }
 
   return children

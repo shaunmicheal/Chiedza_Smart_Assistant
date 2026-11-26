@@ -1,0 +1,315 @@
+.platform-school-detail {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.platform-school-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 18px;
+  color: var(--forest);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.platform-school-back:hover {
+  text-decoration: underline;
+}
+
+.platform-school-detail-overview {
+  padding: 23px;
+}
+
+.platform-school-detail-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.platform-school-detail-icon {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+  place-items: center;
+  border-radius: 13px;
+  background: var(--sage);
+  color: var(--forest);
+}
+
+.platform-school-detail-heading > div:nth-child(2) {
+  min-width: 0;
+  flex: 1;
+}
+
+.platform-school-detail-heading h3 {
+  overflow-wrap: anywhere;
+  color: var(--forest);
+  font-size: 1.15rem;
+}
+
+.platform-school-detail-heading p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.platform-school-detail-contact {
+  display: grid;
+  gap: 13px;
+  margin-top: 23px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.platform-school-detail-contact > div {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.83rem;
+  overflow-wrap: anywhere;
+}
+
+.platform-school-detail-contact svg {
+  flex: 0 0 17px;
+  color: var(--forest);
+}
+
+.platform-school-detail-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 22px;
+}
+
+.platform-school-detail-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin: 20px 0;
+}
+
+.platform-school-detail-stat {
+  display: grid;
+  justify-items: start;
+  gap: 9px;
+  padding: 19px;
+}
+
+.platform-school-detail-stat svg {
+  color: var(--forest);
+}
+
+.platform-school-detail-stat span {
+  color: var(--muted);
+  font-size: 0.77rem;
+}
+
+.platform-school-detail-stat strong {
+  color: var(--forest);
+  font-size: 1.45rem;
+}
+
+.platform-school-detail-section {
+  margin-top: 18px;
+  padding: 22px;
+}
+
+.platform-school-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.platform-school-section-heading h3 {
+  color: var(--forest);
+  font-size: 1rem;
+}
+
+.platform-school-section-heading p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 0.77rem;
+}
+
+.platform-school-membership-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.platform-school-membership-summary > div {
+  display: grid;
+  gap: 5px;
+  padding: 13px;
+  border-radius: 10px;
+  background: #f6f8f5;
+}
+
+.platform-school-membership-summary strong {
+  color: var(--forest);
+  font-size: 1.15rem;
+}
+
+.platform-school-membership-summary span {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.platform-school-membership-list {
+  display: grid;
+}
+
+.platform-school-membership-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+}
+
+.platform-school-member-avatar {
+  display: grid;
+  width: 39px;
+  height: 39px;
+  flex: 0 0 39px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--sage);
+  color: var(--forest);
+  font-size: 0.77rem;
+  font-weight: 700;
+}
+
+.platform-school-member-info {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 4px;
+}
+
+.platform-school-member-info strong {
+  color: var(--charcoal);
+  font-size: 0.82rem;
+}
+
+.platform-school-member-info span,
+.platform-school-member-info small {
+  color: var(--muted);
+  font-size: 0.73rem;
+  overflow-wrap: anywhere;
+}
+
+.platform-school-member-status {
+  display: grid;
+  justify-items: end;
+  gap: 7px;
+}
+
+.platform-school-member-status > span {
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.platform-school-member-status .active {
+  color: #216343;
+}
+
+.platform-school-member-status .inactive {
+  color: #a04438;
+}
+
+.platform-school-member-status small {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.platform-school-application-info {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 24px;
+}
+
+.platform-school-application-info > div {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.platform-school-application-info span {
+  color: var(--muted);
+  font-size: 0.73rem;
+}
+
+.platform-school-application-info strong {
+  color: var(--charcoal);
+  font-size: 0.83rem;
+  overflow-wrap: anywhere;
+}
+
+.platform-school-no-application {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 700px) {
+  .platform-school-detail-overview,
+  .platform-school-detail-section {
+    padding: 16px;
+  }
+
+  .platform-school-detail-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .platform-school-detail-heading > div:nth-child(2) {
+    flex-basis: calc(100% - 70px);
+  }
+
+  .platform-school-detail-heading .platform-school-statuses {
+    width: 100%;
+    justify-content: flex-start;
+    padding-left: 66px;
+  }
+
+  .platform-school-detail-stats {
+    gap: 9px;
+  }
+
+  .platform-school-detail-stat {
+    padding: 13px;
+  }
+
+  .platform-school-membership-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .platform-school-application-info {
+    grid-template-columns: 1fr;
+  }
+
+  .platform-school-member-status small {
+    max-width: 110px;
+    text-align: right;
+  }
+}
+
+@media (max-width: 420px) {
+  .platform-school-detail-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .platform-school-membership-row {
+    align-items: flex-start;
+  }
+}

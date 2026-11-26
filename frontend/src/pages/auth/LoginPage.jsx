@@ -11,6 +11,14 @@ const ROLE_HOME = {
   PARENT: '/parent/overview',
 }
 
+function getUserHome(user) {
+  if (user?.platformRole === 'SUPER_ADMIN') {
+    return '/platform/overview'
+  }
+
+  return ROLE_HOME[user?.memberships?.[0]?.role] || '/login'
+}
+
 function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -26,7 +34,8 @@ function LoginPage() {
     if (user) {
       const destination = user.mustChangePassword
         ? '/password-change'
-        : ROLE_HOME[user.memberships?.[0]?.role] || '/login'
+        : getUserHome(user)
+
       navigate(destination, { replace: true })
     }
   }, [user, navigate])
@@ -38,13 +47,12 @@ function LoginPage() {
 
     try {
       const authenticatedUser = await login(email.trim(), password)
-      const role = authenticatedUser.memberships?.[0]?.role
       const destination = authenticatedUser.mustChangePassword
         ? '/password-change'
-        : ROLE_HOME[role]
+        : getUserHome(authenticatedUser)
 
-      if (!destination) {
-        throw new Error('Your account does not have a supported school role.')
+      if (destination === '/login') {
+        throw new Error('Your account does not have a supported role.')
       }
 
       const requestedPath = location.state?.from
@@ -74,15 +82,16 @@ function LoginPage() {
   if (user) {
     const destination = user.mustChangePassword
       ? '/password-change'
-      : ROLE_HOME[user.memberships?.[0]?.role] || '/login'
+      : getUserHome(user)
+
     return <Navigate to={destination} replace />
   }
 
   return (
     <AuthFrame
       eyebrow="Welcome back"
-      title="Sign in to your school"
-      description="Use your school account to continue to Chiedza Smart Assistant."
+      title="Sign in to Chiedza"
+      description="Use your account details to continue to your workspace."
     >
       <form className="auth-form" onSubmit={handleSubmit}>
         <FormField id="login-email" label="Email address">
@@ -139,6 +148,10 @@ function LoginPage() {
 
       <p className="auth-switch">
         Have a parent invitation? <Link to="/activate">Activate your account</Link>
+      </p>
+
+      <p className="auth-switch">
+        Representing a school? <Link to="/apply">Apply to join Chiedza</Link>
       </p>
     </AuthFrame>
   )

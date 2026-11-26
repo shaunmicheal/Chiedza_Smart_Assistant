@@ -285,7 +285,7 @@ describe("Auth", () => {
     expect(response.status).toBe(401);
   });
 
-  it("logout clears session cookie", async () => {
+  it("logout succeeds with an authenticated Bearer token", async () => {
     const loginRes = await request(app).post("/api/auth/login").send({
       email: ADMIN_EMAIL,
       password: PASSWORD,

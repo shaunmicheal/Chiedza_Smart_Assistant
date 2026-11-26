@@ -21,7 +21,6 @@ export const updateSchoolSchema = z.object({
       email: z.string().email().optional().or(z.literal("")),
       phone: z.string().max(30).optional(),
       address: z.string().max(200).optional(),
-      isActive: z.boolean().optional(),
     })
     .refine((v) => Object.keys(v).length > 0, {
       message: "At least one field must be provided.",

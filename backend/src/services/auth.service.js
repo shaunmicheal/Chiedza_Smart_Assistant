@@ -2,96 +2,22 @@ import prisma from "../config/prisma.js";
 import { hashPassword, verifyPassword } from "../utils/password.js";
 import { signAccessToken } from "../utils/jwt.js";
 
-export const bootstrapInitialAdmin = async (input) => {
-  const existingAdmin = await prisma.schoolMembership.count({
-    where: { role: "SCHOOL_ADMIN" },
-  });
-
-  if (existingAdmin > 0) {
-    const error = new Error("Initial administrator has already been created.");
-    error.status = 409;
-    throw error;
-  }
-
-  const existingSchool = await prisma.school.findUnique({
-    where: { slug: input.schoolSlug },
-  });
-  if (existingSchool) {
-    const error = new Error("A school with this slug already exists.");
-    error.status = 409;
-    throw error;
-  }
-
-  const existingUser = await prisma.user.findUnique({
-    where: { email: input.adminEmail },
-  });
-  if (existingUser) {
-    const error = new Error("A user with this email already exists.");
-    error.status = 409;
-    throw error;
-  }
-
-  const passwordHash = await hashPassword(input.adminPassword);
-
-  const result = await prisma.$transaction(async (tx) => {
-    const school = await tx.school.create({
-      data: {
-        name: input.schoolName,
-        slug: input.schoolSlug,
-      },
-    });
-
-    const user = await tx.user.create({
-      data: {
-        firstName: input.adminFirstName,
-        lastName: input.adminLastName,
-        email: input.adminEmail,
-        passwordHash,
-      },
-    });
-
-    const membership = await tx.schoolMembership.create({
-      data: {
-        schoolId: school.id,
-        userId: user.id,
-        role: "SCHOOL_ADMIN",
-      },
-    });
-
-    return { school, user, membership };
-  }, {
-    maxWait: 10000,
-    timeout: 15000,
-  });
-
-  const token = signAccessToken({ userId: result.user.id });
-
-  return {
-    token,
-    user: {
-      id: result.user.id,
-      firstName: result.user.firstName,
-      lastName: result.user.lastName,
-      email: result.user.email,
-    },
-    school: {
-      id: result.school.id,
-      name: result.school.name,
-      slug: result.school.slug,
-    },
-    membership: {
-      id: result.membership.id,
-      role: result.membership.role,
-    },
-  };
-};
-
 export const login = async ({ email, password }) => {
+  const normalizedEmail = email.trim().toLowerCase();
+
   const user = await prisma.user.findUnique({
-    where: { email },
+    where: { email: normalizedEmail },
     include: {
       memberships: {
-        where: { isActive: true },
+        where: {
+          isActive: true,
+          school: {
+            is: {
+              isActive: true,
+              approvalStatus: "APPROVED",
+            },
+          },
+        },
         select: { id: true, schoolId: true, role: true },
       },
     },
@@ -120,6 +46,7 @@ export const login = async ({ email, password }) => {
       lastName: user.lastName,
       email: user.email,
       mustChangePassword: user.mustChangePassword,
+      platformRole: user.platformRole,
     },
     memberships: user.memberships,
   };
@@ -136,17 +63,29 @@ export const getMe = async (userId) => {
       phone: true,
       isActive: true,
       mustChangePassword: true,
+      platformRole: true,
       memberships: {
-        where: { isActive: true },
+        where: {
+          isActive: true,
+          school: {
+            is: {
+              isActive: true,
+              approvalStatus: "APPROVED",
+            },
+          },
+        },
         select: { id: true, schoolId: true, role: true, createdAt: true },
       },
     },
   });
+
   return user;
 };
 
-
-export const changePassword = async (userId, { currentPassword, newPassword }) => {
+export const changePassword = async (
+  userId,
+  { currentPassword, newPassword },
+) => {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: { id: true, passwordHash: true },
@@ -158,7 +97,10 @@ export const changePassword = async (userId, { currentPassword, newPassword }) =
     throw error;
   }
 
-  const passwordMatches = await verifyPassword(currentPassword, user.passwordHash);
+  const passwordMatches = await verifyPassword(
+    currentPassword,
+    user.passwordHash,
+  );
 
   if (!passwordMatches) {
     const error = new Error("Your current password is incorrect.");
@@ -178,7 +120,6 @@ export const changePassword = async (userId, { currentPassword, newPassword }) =
 
   return { mustChangePassword: false };
 };
-
 
 export const updateProfile = async (userId, data) => {
   const updateData = {};
@@ -206,6 +147,7 @@ export const updateProfile = async (userId, data) => {
       phone: true,
       isActive: true,
       mustChangePassword: true,
+      platformRole: true,
     },
   });
 };

@@ -12,7 +12,7 @@ const ROLE_HOME = {
 }
 
 function PasswordChangePage() {
-  const { user, refreshUser } = useAuth()
+  const { user, activeMembership, refreshUser } = useAuth()
   const navigate = useNavigate()
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -49,7 +49,11 @@ function PasswordChangePage() {
 
       const updatedUser = await refreshUser()
       const destination =
-        ROLE_HOME[updatedUser.memberships?.[0]?.role] || '/login'
+        updatedUser.platformRole === 'SUPER_ADMIN'
+          ? '/platform/overview'
+          : ROLE_HOME[
+              activeMembership?.role || updatedUser.memberships?.[0]?.role
+            ] || '/login'
 
       navigate(destination, { replace: true })
     } catch (err) {

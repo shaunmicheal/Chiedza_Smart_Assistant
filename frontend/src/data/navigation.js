@@ -20,6 +20,7 @@ export const roleNavigation = {
     basePath: '/admin',
     overviewPath: '/admin/overview',
     notificationsPath: '/admin/notifications',
+    profilePath: '/admin/profile',
     settingsPath: '/admin/settings',
     sections: [
       {
@@ -47,6 +48,7 @@ export const roleNavigation = {
         items: [
           { title: 'Alert rules', path: '/admin/alert-rules', icon: SlidersHorizontal },
           { title: 'Settings', path: '/admin/settings', icon: Settings },
+          { title: 'Profile', path: '/admin/profile', icon: CircleUserRound },
         ],
       },
     ],
@@ -56,6 +58,8 @@ export const roleNavigation = {
     basePath: '/teacher',
     overviewPath: '/teacher/overview',
     notificationsPath: '/teacher/notifications',
+    profilePath: '/teacher/profile',
+    settingsPath: '/teacher/settings',
     sections: [
       {
         label: 'Teaching',
@@ -74,6 +78,7 @@ export const roleNavigation = {
           { title: 'Notifications', path: '/teacher/notifications', icon: Bell },
           { title: 'Parent communication', path: '/teacher/parent-communication', icon: MessageSquareText },
           { title: 'Profile', path: '/teacher/profile', icon: CircleUserRound },
+          { title: 'Settings', path: '/teacher/settings', icon: Settings },
         ],
       },
     ],
@@ -83,6 +88,8 @@ export const roleNavigation = {
     basePath: '/parent',
     overviewPath: '/parent/overview',
     notificationsPath: '/parent/notifications',
+    profilePath: '/parent/profile',
+    settingsPath: '/parent/settings',
     sections: [
       {
         label: 'My school',
@@ -99,6 +106,7 @@ export const roleNavigation = {
           { title: 'Messages', path: '/parent/messages', icon: MessageSquareText },
           { title: 'Notifications', path: '/parent/notifications', icon: Bell },
           { title: 'Profile', path: '/parent/profile', icon: CircleUserRound },
+          { title: 'Settings', path: '/parent/settings', icon: Settings },
         ],
       },
     ],
@@ -121,6 +129,9 @@ export const pageDescriptions = {
   '/admin/classes': 'Review school classes and their assigned teachers.',
   '/admin/alert-rules': 'Review demonstration early-warning thresholds.',
   '/admin/settings': 'Configure school workspace preferences.',
+  '/admin/profile': 'Manage your personal information and account security.',
+  '/teacher/settings': 'Manage your personal information and account security.',
+  '/parent/settings': 'Manage your personal information and account security.',
   '/teacher/classes': 'View the classes assigned to this teacher.',
   '/teacher/attendance': 'Record and review attendance for assigned classes.',
   '/teacher/assessments': 'Record assessments and review learner progress.',

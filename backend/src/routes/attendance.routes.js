@@ -75,6 +75,7 @@ router.post(
   "/attendance",
   validate(recordAttendanceSchema),
   requireSchoolMembership,
+  requireRole("SCHOOL_ADMIN", "TEACHER"),
   requireClassAccess,
   attendanceCtrl.recordAttendance,
 );
@@ -84,6 +85,7 @@ router.get(
   "/attendance",
   validate(listAttendanceQuerySchema),
   requireSchoolMembership,
+  requireRole("SCHOOL_ADMIN", "TEACHER"),
   requireClassAccess,
   attendanceCtrl.listAttendance,
 );
@@ -93,6 +95,7 @@ router.get(
   "/learners/:learnerId/attendance",
   validate(schoolAndIdParamSchema("learnerId")),
   requireSchoolMembership,
+  requireRole("SCHOOL_ADMIN", "TEACHER"),
   requireClassAccess,
   attendanceCtrl.getAttendanceByLearner,
 );
@@ -102,6 +105,7 @@ router.get(
   "/attendance/:attendanceId",
   validate(schoolAndIdParamSchema("attendanceId")),
   requireSchoolMembership,
+  requireRole("SCHOOL_ADMIN", "TEACHER"),
   requireClassAccess,
   attendanceCtrl.getAttendanceById,
 );
@@ -111,6 +115,7 @@ router.patch(
   "/attendance/:attendanceId",
   validate(updateAttendanceSchema),
   requireSchoolMembership,
+  requireRole("SCHOOL_ADMIN", "TEACHER"),
   requireClassAccess,
   attendanceCtrl.updateAttendance,
 );

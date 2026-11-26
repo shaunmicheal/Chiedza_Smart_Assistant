@@ -15,8 +15,10 @@ export function AuthProvider({ children }) {
   const refreshUser = useCallback(async () => {
     const result = await apiRequest('/auth/me')
     const authenticatedUser = result.data
+
     setUser(authenticatedUser)
     setActiveMembership(authenticatedUser.memberships?.[0] ?? null)
+
     return authenticatedUser
   }, [])
 
@@ -57,7 +59,10 @@ export function AuthProvider({ children }) {
     try {
       const authenticatedUser = await refreshUser()
 
-      if (!authenticatedUser.memberships?.length) {
+      const isPlatformAdmin =
+        authenticatedUser.platformRole === 'SUPER_ADMIN'
+
+      if (!isPlatformAdmin && !authenticatedUser.memberships?.length) {
         throw new Error(
           'Your account is not linked to a school. Please contact your school administrator.'
         )

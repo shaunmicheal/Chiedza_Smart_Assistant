@@ -3,7 +3,9 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import AdminLayout from '../layouts/AdminLayout'
 import ParentLayout from '../layouts/ParentLayout'
 import TeacherLayout from '../layouts/TeacherLayout'
+import PlatformLayout from '../layouts/PlatformLayout'
 import { pageDescriptions, roleNavigation } from '../data/navigation'
+import { platformNavigation } from '../data/platformNavigation'
 import NotFoundPage from '../pages/NotFoundPage'
 import PlaceholderPage from '../pages/PlaceholderPage'
 import ProtectedRoute from '../components/auth/ProtectedRoute'
@@ -33,6 +35,14 @@ const AdminNotificationsPage = lazy(() => import('../pages/admin/NotificationsPa
 const TeacherNotificationsPage = lazy(() => import('../pages/teacher/NotificationsPage'))
 const LoginPage = lazy(() => import('../pages/auth/LoginPage'))
 const ActivationPage = lazy(() => import('../pages/auth/ActivationPage'))
+const SchoolApplicationPage = lazy(() => import('../pages/auth/SchoolApplicationPage'))
+const PlatformOverviewPage = lazy(() => import('../pages/PlatformOverviewPage'))
+const PlatformApplicationsPage = lazy(() => import('../pages/PlatformApplicationsPage'))
+const PlatformSchoolsPage = lazy(() => import('../pages/PlatformSchoolsPage'))
+const PlatformSchoolDetailPage = lazy(() => import('../pages/PlatformSchoolDetailPage'))
+const PlatformAdministratorsPage = lazy(() => import('../pages/PlatformAdministratorsPage'))
+const PlatformSchoolAdministratorsPage = lazy(() => import('../pages/PlatformSchoolAdministratorsPage'))
+const AdminActivationPage = lazy(() => import('../pages/auth/AdminActivationPage'))
 const PasswordChangePage = lazy(() => import('../pages/auth/PasswordChangePage'))
 
 const overviewPages = {
@@ -72,8 +82,11 @@ const routePages = {
   '/teacher/parent-communication': [ParentCommunicationPage],
   '/admin/alert-rules': [AlertRulesPage],
   '/admin/settings': [SettingsPage],
+  '/admin/profile': [ProfilePage],
   '/teacher/profile': [ProfilePage],
+  '/teacher/settings': [ProfilePage],
   '/parent/profile': [ProfilePage],
+  '/parent/settings': [ProfilePage],
   '/parent/children': [ChildrenPage],
   '/parent/attendance': [ParentAttendancePage],
   '/parent/progress': [ProgressPage],
@@ -119,6 +132,63 @@ function roleRoutes(role, Layout) {
   )
 }
 
+function PlatformRoutes() {
+  const items = platformNavigation.sections.flatMap(
+    (section) => section.items,
+  )
+
+  return (
+    <Route
+      path="platform"
+      element={
+        <ProtectedRoute platformRole="SUPER_ADMIN">
+          <PlatformLayout />
+        </ProtectedRoute>
+      }
+    >
+      <Route index element={<Navigate to="overview" replace />} />
+
+      {items.map((item) => (
+        <Route
+          key={item.path}
+          path={item.path.slice('/platform/'.length)}
+          element={
+            item.path === '/platform/overview' ? (
+              <PlatformOverviewPage />
+            ) : item.path === '/platform/applications' ? (
+              <PlatformApplicationsPage />
+            ) : item.path === '/platform/schools' ? (
+              <PlatformSchoolsPage />
+            ) : item.path === '/platform/administrators' ? (
+              <PlatformAdministratorsPage />
+            ) : item.path === '/platform/profile' || item.path === '/platform/settings' ? (
+              <ProfilePage role="platform" />
+            ) : (
+              <PlaceholderPage
+                page={{
+                  ...item,
+                  description: item.overview
+                    ? 'Monitor Chiedza and manage the schools using the platform.'
+                    : `Manage ${item.title.toLowerCase()} across the Chiedza platform.`,
+                }}
+              />
+            )
+          }
+        />
+      ))}
+
+      <Route
+        path="schools/:schoolId"
+        element={<PlatformSchoolDetailPage />}
+      />
+      <Route
+        path="schools/:schoolId/administrators"
+        element={<PlatformSchoolAdministratorsPage />}
+      />
+    </Route>
+  )
+}
+
 function LoadingPage() {
   return (
     <main className="route-loading" role="status" aria-live="polite">
@@ -128,6 +198,15 @@ function LoadingPage() {
   )
 }
 
+function getUserHome(user) {
+  if (user?.platformRole === 'SUPER_ADMIN') {
+    return '/platform/overview'
+  }
+
+  const role = user?.memberships?.[0]?.role
+  return roleHome[role] || '/login'
+}
+
 function HomeRedirect() {
   const { user, loading } = useAuth()
 
@@ -135,8 +214,7 @@ function HomeRedirect() {
   if (!user) return <Navigate to="/login" replace />
   if (user.mustChangePassword) return <Navigate to="/password-change" replace />
 
-  const role = user.memberships?.[0]?.role
-  return <Navigate to={roleHome[role] || '/login'} replace />
+  return <Navigate to={getUserHome(user)} replace />
 }
 
 function AppRoutes() {
@@ -146,6 +224,8 @@ function AppRoutes() {
         <Route path="/" element={<HomeRedirect />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/activate" element={<ActivationPage />} />
+        <Route path="/admin-activate" element={<AdminActivationPage />} />
+        <Route path="/apply" element={<SchoolApplicationPage />} />
         <Route
           path="/password-change"
           element={
@@ -158,6 +238,7 @@ function AppRoutes() {
         {roleRoutes('admin', AdminLayout)}
         {roleRoutes('teacher', TeacherLayout)}
         {roleRoutes('parent', ParentLayout)}
+        {PlatformRoutes()}
 
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

@@ -1,0 +1,329 @@
+.platform-applications {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.application-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin: 24px 0;
+}
+
+.application-filter {
+  padding: 9px 15px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.application-filter.selected {
+  border-color: var(--forest);
+  background: var(--forest);
+  color: #fff;
+}
+
+.application-list {
+  display: grid;
+  gap: 16px;
+}
+
+.application-card {
+  padding: 22px;
+}
+
+.application-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.application-school-icon {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--sage);
+  color: var(--forest);
+}
+
+.application-school-title {
+  min-width: 0;
+  flex: 1;
+}
+
+.application-school-title h3 {
+  color: var(--forest);
+  font-size: 1.08rem;
+}
+
+.application-school-title p,
+.application-review-date {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.application-status {
+  padding: 6px 10px;
+  border-radius: 20px;
+  background: #edf0ed;
+  color: #536159;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.application-status.pending {
+  background: #fbf2df;
+  color: #86621f;
+}
+
+.application-status.approved {
+  background: #e4f1e8;
+  color: #216343;
+}
+
+.application-status.rejected {
+  background: #f8e9e6;
+  color: #a04438;
+}
+
+.application-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 24px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.application-details > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.application-detail-label {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.application-details strong {
+  overflow-wrap: anywhere;
+  color: var(--charcoal);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.application-address {
+  grid-column: 1 / -1;
+}
+
+.application-actions,
+.application-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.application-approve-button,
+.application-reject-button {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.application-approve-button {
+  background: var(--forest);
+  color: #fff;
+}
+
+.application-reject-button {
+  border-color: #ead4d0;
+  background: #fff;
+  color: #a04438;
+}
+
+.application-approve-button:disabled,
+.application-reject-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.application-rejection-form {
+  display: grid;
+  width: 100%;
+  gap: 9px;
+}
+
+.application-rejection-form label {
+  color: var(--charcoal);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.application-rejection-form textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--charcoal);
+  font: inherit;
+  font-size: 0.86rem;
+  resize: vertical;
+}
+
+.application-rejection-form textarea:focus {
+  border-color: var(--forest);
+  outline: 3px solid rgba(23, 77, 58, 0.09);
+}
+
+.application-rejection-note,
+.application-approved-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 18px 0 0;
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.application-rejection-note {
+  color: #a04438;
+}
+
+.application-approved-note {
+  color: #216343;
+}
+
+.application-review-date {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 18px;
+}
+
+.application-loading {
+  display: flex;
+  min-height: 180px;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.platform-feedback {
+  margin: 14px 0;
+  padding: 12px 14px;
+  border-radius: 9px;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
+.platform-feedback.error {
+  background: #f8e9e6;
+  color: #963e34;
+}
+
+.platform-feedback.success {
+  background: #e4f1e8;
+  color: #216343;
+}
+
+.school-application-form {
+  gap: 22px;
+}
+
+.school-form-section {
+  display: grid;
+  gap: 17px;
+}
+
+.school-form-section h2 {
+  padding-bottom: 9px;
+  border-bottom: 1px solid #e6e8df;
+  color: var(--auth-forest, #174d3a);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.school-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.school-application-footnote {
+  margin: -5px 0 0;
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.6;
+}
+
+.school-application-success {
+  display: grid;
+  justify-items: start;
+  gap: 16px;
+  color: var(--forest);
+}
+
+.school-application-success h2 {
+  font-size: 1.3rem;
+}
+
+.school-application-success p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.7;
+}
+
+.school-application-success .primary-button {
+  margin-top: 8px;
+  text-decoration: none;
+}
+
+@media (max-width: 640px) {
+  .application-card {
+    padding: 16px;
+  }
+
+  .application-details,
+  .school-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .application-card-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .application-status {
+    margin-left: 60px;
+  }
+
+  .application-actions > button {
+    flex: 1;
+  }
+}

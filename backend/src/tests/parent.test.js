@@ -1,6 +1,8 @@
 import request from "supertest";
 import { createHash } from "node:crypto";
 import prisma from "../config/prisma.js";
+import * as parentService from "../services/parent.service.js";
+import * as schoolService from "../services/school.service.js";
 import { hashPassword } from "../utils/password.js";
 import app from "../server.js";
 
@@ -15,6 +17,8 @@ const EMAILS = {
   invitation1: "invited-parent-one@test.chiedza.local",
   invitation2: "invited-parent-two@test.chiedza.local",
   invitation3: "invited-parent-three@test.chiedza.local",
+  inactiveParent: "inactive-parent@test.chiedza.local",
+  inactiveSchool: "inactive-school-parent@test.chiedza.local",
 };
 
 let school;
@@ -303,6 +307,46 @@ describe("Parent account management", () => {
     parent1Token = await login(EMAILS.parent1);
   });
 
+  it("does not link an inactive existing parent account", async () => {
+    const passwordHash = await hashPassword(PASSWORD);
+
+    const inactiveParent = await prisma.user.create({
+      data: {
+        firstName: "Inactive",
+        lastName: "Parent",
+        email: EMAILS.inactiveParent,
+        passwordHash,
+        isActive: false,
+      },
+    });
+
+    await prisma.schoolMembership.create({
+      data: {
+        schoolId: school.id,
+        userId: inactiveParent.id,
+        role: "PARENT",
+      },
+    });
+
+    const response = await createParent(adminToken, {
+      email: EMAILS.inactiveParent,
+      learnerId: learners[1].id,
+      relationship: "Guardian",
+    });
+
+    expect(response.status).toBe(403);
+    expect(response.body.message).toContain("account is inactive");
+
+    const link = await prisma.parentLearner.findFirst({
+      where: {
+        guardianUserId: inactiveParent.id,
+        learnerId: learners[1].id,
+      },
+    });
+
+    expect(link).toBeNull();
+  });
+
   it("rejects linking a parent email that has no existing account", async () => {
     const response = await createParent(adminToken, {
       email: "new-parent@test.chiedza.local",
@@ -536,6 +580,28 @@ describe("Parent portal data access", () => {
       .toBe(true);
   });
 
+  it("hides parent records and school directory entries when their school is inactive", async () => {
+    await prisma.school.update({
+      where: { id: school.id },
+      data: { isActive: false },
+    });
+
+    try {
+      expect(await parentService.listMyChildren(parent1.parent.id)).toHaveLength(0);
+      expect(await parentService.listMyAttendance(parent1.parent.id)).toHaveLength(0);
+      expect(await parentService.listMyAssessments(parent1.parent.id)).toHaveLength(0);
+      expect(await parentService.listMyMessages(parent1.parent.id)).toHaveLength(0);
+
+      const schools = await schoolService.listSchoolsForUser(admin.id);
+      expect(schools.some((entry) => entry.school.id === school.id)).toBe(false);
+    } finally {
+      await prisma.school.update({
+        where: { id: school.id },
+        data: { isActive: true },
+      });
+    }
+  });
+
   it("does not allow an admin or teacher to use parent portal endpoints", async () => {
     const adminResponse = await request(app)
       .get("/api/parent/children")
@@ -701,6 +767,48 @@ describe("Parent invitation activation", () => {
     expect(children.status).toBe(200);
     expect(children.body.data).toHaveLength(1);
     expect(children.body.data[0].learnerId).toBe(learners[0].id);
+  });
+
+  it("rejects parent activation while the school is inactive", async () => {
+    const created = await createInvitation(
+      adminToken,
+      EMAILS.inactiveSchool,
+      learners[1].id
+    );
+
+    expect(created.status).toBe(201);
+
+    const id = created.body.data.invitation.id;
+    const token = extractActivationToken(created);
+
+    await prisma.school.update({
+      where: { id: school.id },
+      data: { isActive: false },
+    });
+
+    try {
+      const activation = await activateInvitation(token);
+
+      expect(activation.status).toBe(409);
+
+      const stored = await prisma.parentInvitation.findUnique({
+        where: { id },
+      });
+
+      // Failed activation must roll back the invitation claim.
+      expect(stored.status).toBe("PENDING");
+
+      const account = await prisma.user.findUnique({
+        where: { email: EMAILS.inactiveSchool },
+      });
+
+      expect(account).toBeNull();
+    } finally {
+      await prisma.school.update({
+        where: { id: school.id },
+        data: { isActive: true },
+      });
+    }
   });
 
   it("rejects reuse of an accepted invitation", async () => {

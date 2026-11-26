@@ -1,9 +1,10 @@
 export const requireRole = (...allowedRoles) => (req, res, next) => {
   const role = req.membership?.role ?? req.role;
-  const hasRole =
-    role
-      ? allowedRoles.includes(role)
-      : (req.memberships || []).some((m) => allowedRoles.includes(m.role));
+  const hasRole = role
+    ? allowedRoles.includes(role)
+    : (req.memberships || []).some((membership) =>
+        allowedRoles.includes(membership.role),
+      );
 
   if (!hasRole) {
     return res.status(403).json({
@@ -11,6 +12,20 @@ export const requireRole = (...allowedRoles) => (req, res, next) => {
       message: "You do not have permission to perform this action.",
     });
   }
+
+  next();
+};
+
+export const requirePlatformRole = (...allowedRoles) => (req, res, next) => {
+  const platformRole = req.user?.platformRole;
+
+  if (!platformRole || !allowedRoles.includes(platformRole)) {
+    return res.status(403).json({
+      success: false,
+      message: "You do not have permission to access this platform resource.",
+    });
+  }
+
   next();
 };
 
@@ -26,7 +41,7 @@ export const requireSchoolMembership = (req, res, next) => {
   }
 
   const membership = (req.memberships || []).find(
-    (m) => m.schoolId === schoolId && m.isActive !== false
+    (item) => item.schoolId === schoolId && item.isActive !== false,
   );
 
   if (!membership) {
