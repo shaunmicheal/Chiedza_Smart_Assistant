@@ -52,7 +52,7 @@ describe("Draft Controller", () => {
     vi.clearAllMocks();
     prisma.classTeacher.findFirst.mockResolvedValue({ id: "assignment-1" });
     mockOpenAICreate.mockReset();
-    process.env.OPENAI_API_KEY = "sk-proj-test-key-12345";
+    process.env.GEMINI_API_KEY = "test-gemini-api-key";
   });
 
   describe("listDrafts", () => {
@@ -87,7 +87,13 @@ describe("Draft Controller", () => {
       classId: "c1",
       alertType: "REPEATED_ABSENCES",
       status: "ACTIVE",
-      evidence: { absencesCount: 10, declineThreshold: "20%" },
+      evidence: {
+        absenceCount: 10,
+        absenceDateRange: "2026-11-01T00:00:00.000Z",
+        dateRangeEnd: "2026-11-05T00:00:00.000Z",
+        threshold: 3,
+        observationPeriodDays: 5,
+      },
       alertRule: { id: "r1", name: "Repeated Absences", alertType: "REPEATED_ABSENCES" },
       learner: { id: "l1", firstName: "John", lastName: "Doe", classId: "c1" },
       class: { id: "c1", name: "Form 1" },
@@ -113,6 +119,134 @@ describe("Draft Controller", () => {
       await generateDraft(req, res, next);
       expect(res.status).toHaveBeenCalledWith(201);
       expect(res.json).toHaveBeenCalled();
+
+      const geminiRequest = mockOpenAICreate.mock.calls[0][0];
+      const prompt = geminiRequest.messages[0].content;
+      expect(prompt).toContain("Language required: English");
+      expect(prompt).toContain('"absenceCount":10');
+      expect(prompt).toContain('"absenceThreshold":3');
+      expect(prompt).toContain('"observationPeriodDays":5');
+      expect(prompt).not.toContain("2026-11-01");
+      expect(prompt).not.toContain("2026-11-05");
+      expect(prompt).not.toContain("John");
+      expect(prompt).not.toContain("Doe");
+      expect(prompt).toContain("Do not invent names, dates, causes");
+      expect(prisma.parentCommunicationDraft.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            schoolId_alertId_userId_language_status: {
+              schoolId: "s1",
+              alertId: "a1",
+              userId: "u1",
+              language: "en",
+              status: "DRAFT",
+            },
+          },
+        }),
+      );
+    });
+
+    it("should send academic percentages only and exclude assessment details from Gemini", async () => {
+      const academicAlert = {
+        ...mockAlert,
+        alertType: "ACADEMIC_DECLINE",
+        alertRule: {
+          id: "r2",
+          name: "Academic Decline",
+          alertType: "ACADEMIC_DECLINE",
+        },
+        evidence: {
+          assessmentsCompared: 3,
+          declineThreshold: 20,
+          firstAssessment: {
+            title: "PRIVATE_FIRST_ASSESSMENT_TITLE",
+            date: "2026-10-01T00:00:00.000Z",
+            score: 91,
+            maxScore: 100,
+            percentage: 91,
+          },
+          lastAssessment: {
+            title: "PRIVATE_LAST_ASSESSMENT_TITLE",
+            date: "2026-11-01T00:00:00.000Z",
+            score: 52,
+            maxScore: 100,
+            percentage: 52,
+          },
+        },
+      };
+
+      prisma.earlyWarningAlert.findFirst.mockResolvedValue(academicAlert);
+      mockOpenAICreate.mockResolvedValue({
+        choices: [{ message: { content: "A supportive academic progress message." } }],
+      });
+
+      const next = vi.fn();
+      const req = {
+        role: "TEACHER",
+        schoolId: "s1",
+        user: { id: "u1" },
+        membership: { id: "m1", schoolId: "s1", role: "TEACHER" },
+        body: { alertId: "a1", language: "en" },
+      };
+      const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+
+      await generateDraft(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(next).not.toHaveBeenCalled();
+
+      const prompt = mockOpenAICreate.mock.calls[0][0].messages[0].content;
+
+      expect(prompt).toContain('"assessmentsCompared":3');
+      expect(prompt).toContain('"declineThreshold":20');
+      expect(prompt).toContain('"firstAssessmentPercentage":91');
+      expect(prompt).toContain('"lastAssessmentPercentage":52');
+
+      expect(prompt).not.toContain("PRIVATE_FIRST_ASSESSMENT_TITLE");
+      expect(prompt).not.toContain("PRIVATE_LAST_ASSESSMENT_TITLE");
+      expect(prompt).not.toContain("2026-10-01");
+      expect(prompt).not.toContain("2026-11-01");
+      expect(prompt).not.toContain('"score":91');
+      expect(prompt).not.toContain('"score":52');
+      expect(prompt).not.toContain('"maxScore":100');
+      expect(prompt).not.toContain("John");
+      expect(prompt).not.toContain("Doe");
+    });
+
+    it("should preserve a separate Shona draft for the same alert and user", async () => {
+      prisma.earlyWarningAlert.findFirst.mockResolvedValue(mockAlert);
+      mockOpenAICreate.mockResolvedValue({
+        choices: [{ message: { content: "Shona message" } }],
+      });
+
+      const next = vi.fn();
+      const req = {
+        role: "TEACHER",
+        schoolId: "s1",
+        user: { id: "u1" },
+        membership: { id: "m1", schoolId: "s1", role: "TEACHER" },
+        body: { alertId: "a1", language: "sn" },
+      };
+      const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
+
+      await generateDraft(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      const prompt = mockOpenAICreate.mock.calls[0][0].messages[0].content;
+      expect(prompt).toContain("Language required: Zimbabwean Shona");
+      expect(prisma.parentCommunicationDraft.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            schoolId_alertId_userId_language_status: {
+              schoolId: "s1",
+              alertId: "a1",
+              userId: "u1",
+              language: "sn",
+              status: "DRAFT",
+            },
+          },
+        }),
+      );
     });
 
     it("should reject parent access via next", async () => {
@@ -124,9 +258,9 @@ describe("Draft Controller", () => {
       expect(next).toHaveBeenCalledWith(expect.objectContaining({ status: 403 }));
     });
 
-    it("should return error when OpenAI key is missing", async () => {
-      const originalKey = process.env.OPENAI_API_KEY;
-      delete process.env.OPENAI_API_KEY;
+    it("should return error when Gemini key is missing", async () => {
+      const originalKey = process.env.GEMINI_API_KEY;
+      delete process.env.GEMINI_API_KEY;
       try {
         prisma.earlyWarningAlert.findFirst.mockResolvedValue(mockAlert);
         const next = vi.fn();
@@ -141,7 +275,11 @@ describe("Draft Controller", () => {
         await generateDraft(req, res, next);
         expect(next).toHaveBeenCalledWith(expect.objectContaining({ status: 500 }));
       } finally {
-        process.env.OPENAI_API_KEY = originalKey;
+        if (originalKey === undefined) {
+          delete process.env.GEMINI_API_KEY;
+        } else {
+          process.env.GEMINI_API_KEY = originalKey;
+        }
       }
     });
   });

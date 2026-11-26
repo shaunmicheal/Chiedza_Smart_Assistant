@@ -290,68 +290,113 @@ export const generateDraft = async (req, res, next) => {
     // Retrieve only the evidence needed to explain the alert
     const evidence = alert.evidence || {};
 
-    // Build a concise prompt for OpenAI focusing on the core issues
-    const learnerInfo = alert.learner
-      ? { firstName: alert.learner.firstName, lastName: alert.learner.lastName }
-      : null;
+    // Build a concise prompt for Gemini focusing on the core issues
+    // Build a structured, allowlisted evidence summary.
+    // The alert service stores absenceCount inside evidence and also exposes
+    // absencesCount as a top-level alert field.
+    const evidenceContext = {};
 
-    // Construct minimal evidence summary – include applicable recorded evidence
-    const evidenceSummaryParts = [];
+    if (alert.alertType === "REPEATED_ABSENCES") {
+      const absenceCount = evidence.absenceCount ?? alert.absencesCount;
+      const absenceThreshold =
+        evidence.threshold ?? alert.alertRule?.config?.absenceThreshold;
+      const observationPeriodDays = evidence.observationPeriodDays;
 
-    if (evidence.absencesCount !== undefined) {
-      evidenceSummaryParts.push(`Absences: ${evidence.absencesCount}`);
+      if (absenceCount !== undefined && absenceCount !== null) {
+        evidenceContext.absenceCount = absenceCount;
+      }
+      if (absenceThreshold !== undefined && absenceThreshold !== null) {
+        evidenceContext.absenceThreshold = absenceThreshold;
+      }
+      if (
+        observationPeriodDays !== undefined &&
+        observationPeriodDays !== null
+      ) {
+        evidenceContext.observationPeriodDays = observationPeriodDays;
+      }
     }
 
-    if (evidence.absenceDateRange !== undefined) {
-      evidenceSummaryParts.push(`Absence date range: ${evidence.absenceDateRange}`);
+    if (alert.alertType === "ACADEMIC_DECLINE") {
+      const assessmentsCompared =
+        evidence.assessmentsCompared ?? alert.assessmentsCompared;
+      const declineThreshold =
+        evidence.declineThreshold ?? alert.declineThreshold;
+
+      if (assessmentsCompared !== undefined && assessmentsCompared !== null) {
+        evidenceContext.assessmentsCompared = assessmentsCompared;
+      }
+      if (declineThreshold !== undefined && declineThreshold !== null) {
+        evidenceContext.declineThreshold = declineThreshold;
+      }
+      // Send percentages only. Keep assessment titles, dates and raw marks
+      // inside Chiedza rather than forwarding individual records to Gemini.
+      const firstPercentage = evidence.firstAssessment?.percentage;
+      const lastPercentage = evidence.lastAssessment?.percentage;
+
+      if (
+        typeof firstPercentage === "number" &&
+        Number.isFinite(firstPercentage)
+      ) {
+        evidenceContext.firstAssessmentPercentage = firstPercentage;
+      }
+      if (
+        typeof lastPercentage === "number" &&
+        Number.isFinite(lastPercentage)
+      ) {
+        evidenceContext.lastAssessmentPercentage = lastPercentage;
+      }
     }
 
-    if (evidence.declineThreshold !== undefined) {
-      evidenceSummaryParts.push(`Decline threshold: ${evidence.declineThreshold}`);
+    const evidenceSummary =
+      Object.keys(evidenceContext).length > 0
+        ? JSON.stringify(evidenceContext)
+        : null;
+
+    // Keep personal data out of the AI request. Supply only recorded evidence.
+    const prompt = `You write parent-facing school communication for a Zimbabwean school.
+
+Alert type: ${alert.alertRule?.name || alert.alertType || "unknown"}
+Alert status: ${alert.status}
+Language required: ${language === "en" ? "English" : "Zimbabwean Shona"}
+
+Write one supportive, professional message to a parent or guardian.
+- Explain the recorded reason for the alert clearly and constructively.
+- Encourage partnership between the family and school.
+- Use a respectful, reassuring tone appropriate for a Zimbabwean school.
+- ${
+      language === "sn"
+        ? "Write natural, fluent Zimbabwean Shona. Do not translate English word-for-word. Use clear language suitable for a parent or guardian."
+        : "Write clear, plain English suitable for a parent or guardian."
     }
+- Use only the evidence supplied below. Do not invent names, dates, causes, diagnoses, marks, attendance records or trends.
+- Do not claim that the learner has a medical, developmental or psychological condition.
+- Do not exaggerate the risk or blame the learner or family.
+- If evidence is incomplete, explain only what is known and recommend speaking with the school.
+- Keep the message under 200 words.
+- Return only the message, without a heading, language label or explanation.
 
-    if (evidence.assessmentsCompared !== undefined) {
-      evidenceSummaryParts.push(`Assessments compared: ${evidence.assessmentsCompared}`);
-    }
+Recorded evidence (JSON):
+${evidenceSummary || "No specific evidence was recorded for this alert."}
 
-    if (evidence.lastAssessmentDate !== undefined) {
-      evidenceSummaryParts.push(`Last assessment date: ${evidence.lastAssessmentDate}`);
-    }
+Parent message:`;
 
-    const evidenceSummary = evidenceSummaryParts.length > 0 ? evidenceSummaryParts.join(", ") : null;
-
-    // Build the OpenAI prompt – minimise personal data
-    const prompt = `You are writing a parent-facing message about an early warning alert for a learner in Zimbabwe.
-
-Alert type: ${alert.alertRule?.name || "unknown"}
-Current status: ${alert.status}
-
-Please write a supportive, professional message in ${language === "en" ? "English" : "Shona"} that:
-- Explains the reason for the alert in a clear, constructive way
-- Encourages parental partnership and support
-- Uses appropriate tone for a Zimbabwean school context
-- ${language === "sn" ? "Write naturally in standard Zimbabwean Shona. Do not use a word-for-word dictionary translation from English." : "Write in plain English. Do not translate to Shona."}
-
-Keep the message concise (under 300 words). Do not invent fictitious learner data, causes, diagnoses, evidence, marks or trends. Use only the context provided above.
-
-Evidence context: ${evidenceSummary || "No specific evidence recorded"}
-
-Message:`;
-
-// Check if OpenAI key is configured – do this before creating client
-if (!process.env.OPENAI_API_KEY) {
+// Check if Gemini key is configured before creating the client
+if (!process.env.GEMINI_API_KEY) {
   const error = new Error(
-    "OpenAI API key not configured. Contact administrator to enable draft generation."
+    "Gemini API key not configured. Contact administrator to enable draft generation."
   );
   error.status = 500;
   throw error;
 }
 
-// Create OpenAI client (lazy – not at module import time, no module-level caching)
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Create Gemini-compatible client lazily, without module-level caching
+const client = new OpenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+  baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+});
 
 const completion = await client.chat.completions.create({
-  model: "gpt-4o-mini",
+  model: "gemini-3.5-flash-lite",
   messages: [{ role: "user", content: prompt }],
   temperature: 0.7,
 });
@@ -359,7 +404,7 @@ const completion = await client.chat.completions.create({
 const generatedText = completion.choices[0]?.message?.content || "";
 
 if (!generatedText) {
-  const error = new Error("Failed to generate draft text from OpenAI.");
+  const error = new Error("Failed to generate draft text from Gemini.");
   error.status = 500;
   throw error;
 }
@@ -371,10 +416,11 @@ const userId = req.user.id;
 // otherwise create a new one.
 const draft = await prisma.parentCommunicationDraft.upsert({
   where: {
-    schoolId_alertId_userId_status: {
+    schoolId_alertId_userId_language_status: {
       schoolId: req.schoolId,
       alertId: alert.id,
       userId,
+      language,
       status: "DRAFT",
     },
   },

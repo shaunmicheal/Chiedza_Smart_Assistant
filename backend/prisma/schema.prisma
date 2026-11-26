@@ -336,7 +336,7 @@ model ParentCommunicationDraft {
   school    School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   alert     EarlyWarningAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
 
-  @@unique([schoolId, alertId, userId, status])
+  @@unique([schoolId, alertId, userId, language, status])
   @@index([schoolId])
   @@index([alertId])
 }
